@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\IngestHookController;
 use App\Http\Controllers\TileController;
-use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
 
 Route::livewire('/', 'pages::map')->name('home');
@@ -14,7 +14,7 @@ Route::get('tiles/{layer}/{z}/{x}/{y}.mvt', [TileController::class, 'show'])
     ->where(['z' => '[0-9]{1,2}', 'x' => '[0-9]{1,7}', 'y' => '[0-9]{1,7}'])->name('tiles');
 
 Route::post('hooks/ingest-complete', IngestHookController::class)
-    ->withoutMiddleware([ValidateCsrfToken::class])->name('hooks.ingest');
+    ->withoutMiddleware([PreventRequestForgery::class])->name('hooks.ingest');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::redirect('dashboard', '/watch-areas')->name('dashboard');

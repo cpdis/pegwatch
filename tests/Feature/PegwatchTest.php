@@ -6,6 +6,7 @@ use App\Alerts\AlertMatcher;
 use App\Mail\WatchAreaDigest;
 use App\Models\User;
 use App\Models\WatchArea;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -144,6 +145,15 @@ class PegwatchTest extends TestCase
 
         // Running again sends nothing new.
         $this->assertSame(['matched' => 0, 'emails' => 0], app(AlertMatcher::class)->run($runId));
+    }
+
+    public function test_ingest_hook_is_exempt_from_request_forgery_checks(): void
+    {
+        // PHPUnit skips CSRF, so check the exemption itself. It must name
+        // PreventRequestForgery: excluding the ValidateCsrfToken subclass still
+        // let the cached routes in production answer the ingest's curl with 419.
+        $route = app('router')->getRoutes()->getByName('hooks.ingest');
+        $this->assertContains(PreventRequestForgery::class, $route->excludedMiddleware());
     }
 
     public function test_ingest_hook_requires_the_token(): void
