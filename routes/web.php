@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DigestUnsubscribeController;
 use App\Http\Controllers\IngestHookController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\TileController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +18,10 @@ Route::livewire('digest/unsubscribe/{token}', 'pages::digest.unsubscribe')->name
 Route::post('digest/unsubscribe/{token}', DigestUnsubscribeController::class)
     ->withoutMiddleware([PreventRequestForgery::class])->name('digest.unsubscribe.one-click');
 Route::livewire('digest/{week}', 'pages::digest.issue')->where('week', '[0-9]{4}-W[0-9]{2}')->name('digest.issue');
+
+Route::livewire('pro', 'pages::pro')->name('pro');
+Route::post('hooks/stripe', StripeWebhookController::class)
+    ->withoutMiddleware([PreventRequestForgery::class])->name('hooks.stripe');
 
 Route::get('tiles/{layer}/{z}/{x}/{y}.mvt', [TileController::class, 'show'])
     ->where(['z' => '[0-9]{1,2}', 'x' => '[0-9]{1,7}', 'y' => '[0-9]{1,7}'])->name('tiles');

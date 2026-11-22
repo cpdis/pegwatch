@@ -2,7 +2,7 @@
 
 WA mining tenement tracker. `ingest/` is the nightly Python job that pulls the SLIP
 tenement layers into PostGIS and diffs snapshots into `tenement_events`; the Laravel 13 +
-Livewire 4 + Flux app at the repo root reads those tables. See README.md.
+Livewire 4 + Flux app at the repo root reads those tables. See README.md; the product plan and roadmap are in `docs/plan.md`.
 
 - Pages are single-file Livewire components in `resources/views/pages/` (routed with
   `Route::livewire`); shared UI is Flux components. Use Flux before hand-rolled markup.
