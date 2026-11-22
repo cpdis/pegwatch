@@ -49,9 +49,9 @@ has one watch area (a circle up to 50 km) and the death and release alerts.
 1. In Laravel Cloud, choose **+ New application**, then **Connect to GitHub**,
    pick `cpdis/pegwatch`, name it, pick the region nearest Perth (Sydney if the
    Region list offers it) and **Create Application**.
-2. In the environment's settings, set the branch to `main` and PHP 8.4. If Flux Pro is installed,
-   add a `COMPOSER_AUTH` environment variable (see Flux Pro below) so the build can install it.
-   - Build command: `composer install --no-dev && npm ci --audit false && npm run build && php artisan optimize`
+2. In the environment's settings, set the branch to `main`. Add `FLUX_USERNAME` and
+   `FLUX_LICENSE_KEY` environment variables (see Flux Pro below) so the build can install Flux Pro.
+   - Build command: `composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY" && composer install --no-dev && rm -f auth.json && npm ci --audit false && npm run build && php artisan optimize`
    - Deploy command: `php artisan migrate --force`
 3. On the environment canvas, **Add database**, then create a **Laravel Serverless
    Postgres** cluster in the same region with a `pegwatch` database. The first
@@ -120,5 +120,8 @@ install needs the licence: the username is the email on the Flux account and the
 
 - Locally: `composer config http-basic.composer.fluxui.dev EMAIL KEY` writes `auth.json`, which is
   gitignored.
-- GitHub Actions and Laravel Cloud: a secret or environment variable named `COMPOSER_AUTH` holding
+- GitHub Actions: a repository secret named `COMPOSER_AUTH` holding
   `{"http-basic":{"composer.fluxui.dev":{"username":"EMAIL","password":"KEY"}}}`.
+- Laravel Cloud: environment variables `FLUX_USERNAME` (the email) and `FLUX_LICENSE_KEY`, which
+  the build command turns into a throwaway `auth.json`. A raw `COMPOSER_AUTH` JSON value in Cloud's
+  environment editor did not authenticate (the first build failed with HTTP 401).
