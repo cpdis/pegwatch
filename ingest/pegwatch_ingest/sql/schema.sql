@@ -35,7 +35,7 @@ language sql immutable as $$ select nullif(trim(v #>> '{}'), '') $$;
 -- Anything else is treated as a natural person (shown by name, never address).
 create or replace function pw_is_company(name text) returns boolean
 language sql immutable as $$
-  select name ~* '(\mPTY\M|\mLTD\M|\mLIMITED\M|\mCORP|\mINC\M|\mN\.?L\.?$|\mCOMPANY\M|\mTRUST\M|\mHOLDINGS\M|\mMINING\M|\mRESOURCES\M|\mMINERALS\M|\mGROUP\M|\mPARTNERSHIP\M|\mSHIRE\M|\mCOUNCIL\M|\mSTATE OF\M|\mMINISTER\M|\mCOMMISSION\M|\mAUTHORITY\M|\mCORPORATION\M|\mBHP\M|\mFORTESCUE\M|\mCOOPERATIVE\M|\mASSOCIATION\M|\mINCORPORATED\M)'
+  select name ~* '(\mPTY\M|\mLTD\M|\mLIMITED\M|\mCORP\M|\mINC\M|\mN\.?L\.?$|\mCOMPANY\M|\mTRUST\M|\mHOLDINGS\M|\mMINING\M|\mRESOURCES\M|\mMINERALS\M|\mGROUP\M|\mPARTNERSHIP\M|\mSHIRE\M|\mCOUNCIL\M|\mSTATE OF\M|\mMINISTER\M|\mCOMMISSION\M|\mAUTHORITY\M|\mCORPORATION\M|\mBHP\M|\mFORTESCUE\M|\mCOOPERATIVE\M|\mASSOCIATION\M|\mINCORPORATED\M)'
 $$;
 
 create table if not exists ingest_runs (

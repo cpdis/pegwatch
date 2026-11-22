@@ -57,6 +57,19 @@ class Format
         }
     }
 
+    /** The register's own area, in its unit: BL. is graticular blocks, HA. hectares. */
+    public static function legalArea(float $area, ?string $unit): string
+    {
+        $n = rtrim(rtrim(number_format($area, 4), '0'), '.');
+
+        return match (strtoupper(rtrim((string) $unit, '.'))) {
+            'BL' => $n.' '.($area == 1 ? 'block' : 'blocks'),
+            'HA' => $n.' ha',
+            'KM2' => $n.' km²',
+            default => trim($n.' '.strtolower(rtrim((string) $unit, '.'))),
+        };
+    }
+
     public static function pct(mixed $v): string
     {
         return is_numeric($v) ? round((float) $v * 100).'%' : '?';

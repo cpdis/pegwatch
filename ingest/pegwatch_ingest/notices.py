@@ -90,7 +90,7 @@ def store(conn, run_id: int, items: list[dict]) -> int:
 
 
 CROSSCHECK_SQL = """
--- The live layer's extract (stamped about midday AWST) holds lodgements up to the
+-- The live layer's extract (stamped about 4am AWST) holds lodgements up to the
 -- end of the previous day, so the cutoff is local midnight on the extract date.
 with x as (select (date_trunc('day', max(extract_at) at time zone 'Australia/Perth')
                    at time zone 'Australia/Perth') as extract_at from tenements),
