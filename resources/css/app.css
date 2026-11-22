@@ -64,3 +64,13 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+/*
+ * The search palette opens from the keyboard (Cmd/Ctrl+K), often many
+ * times a session, so it appears and goes at once instead of Flux's
+ * 150ms fade and scale.
+ */
+[data-flux-modal] > dialog[data-modal='search'],
+[data-flux-modal] > dialog[data-modal='search']::backdrop {
+    transition: none;
+}
