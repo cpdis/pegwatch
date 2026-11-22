@@ -60,7 +60,8 @@ has one watch area (a circle up to 50 km) and the death and release alerts.
    `PEGWATCH_INGEST_TOKEN` (any long random string), and mail settings
    (`MAIL_MAILER`, `MAIL_FROM_ADDRESS`, plus your provider's keys). Cache and
    sessions use the database by default, which suits Cloud's ephemeral disk.
-5. **Deploy**. The app gets a free `*.laravel.cloud` domain; add `pegwatch.au`
+5. **Deploy** from the **Review** button on the pending-changes bar. Settings changes stay pending
+   until a deploy started there; a deploy triggered by a push does not apply them. The app gets a free `*.laravel.cloud` domain; add `pegwatch.au`
    later under **Network settings**, then **Add domain**.
 6. Point the nightly ingest at the app's database. In Cloud, open
    **Resources**, then **Databases**, then the cluster, then **View
