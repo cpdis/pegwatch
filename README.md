@@ -67,7 +67,8 @@ has one watch area (a circle up to 50 km) and the death and release alerts.
    **Resources**, then **Databases**, then the cluster, then **View
    credentials**. In GitHub (**Settings**, then **Secrets and variables**,
    then **Actions**) add:
-   - `PEGWATCH_DATABASE_URL`: `postgresql://USER:PASSWORD@HOST/pegwatch?sslmode=require`
+   - `PEGWATCH_DATABASE_URL`: `postgresql://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require`, using
+     the direct host (no `-pooler`): the ingest relies on temp tables and long transactions
    - `PEGWATCH_HOOK_URL`: `https://<your app>.laravel.cloud/hooks/ingest-complete`
    - `PEGWATCH_INGEST_TOKEN`: the same value as in Cloud
    The next nightly run takes a fresh baseline in that database (about a
