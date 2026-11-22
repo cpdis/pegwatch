@@ -3,7 +3,7 @@ import datetime as dt
 
 from pegwatch_ingest import db
 from pegwatch_ingest.layers import AMALGAMATION_PENDING
-from tests.test_diff import (DAY, DSN, EXTRACT_1, EXTRACT_2, MIDNIGHT_18_NOV, conn, dead, events,  # noqa: F401
+from test_diff import (DAY, DSN, EXTRACT_1, EXTRACT_2, MIDNIGHT_18_NOV, conn, dead, events,  # noqa: F401
                              night1, release, runner, square, stage, ten)
 
 
