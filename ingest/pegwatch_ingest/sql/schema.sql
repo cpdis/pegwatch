@@ -101,8 +101,22 @@ create table if not exists dead_tenements (
   primary key (tenid, ended_at)
 );
 -- The DEAD layer has one row per holder; all holders of a death are kept here.
-alter table dead_tenements add column if not exists holders text[] not null default '{}';
-alter table dead_tenements add column if not exists holders_are_company boolean[] not null default '{}';
+-- ALTER TABLE takes an ACCESS EXCLUSIVE lock even when the column exists, so
+-- check the catalogue first: otherwise the nightly re-run queues behind any
+-- open read and every later read queues behind it.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns
+                 where table_schema = current_schema() and table_name = 'dead_tenements'
+                   and column_name = 'holders') then
+    alter table dead_tenements add column holders text[] not null default '{}';
+  end if;
+  if not exists (select 1 from information_schema.columns
+                 where table_schema = current_schema() and table_name = 'dead_tenements'
+                   and column_name = 'holders_are_company') then
+    alter table dead_tenements add column holders_are_company boolean[] not null default '{}';
+  end if;
+end $$;
 create index if not exists dead_tenements_geom_idx on dead_tenements using gist (geom);
 create index if not exists dead_tenements_tenid_idx on dead_tenements (tenid);
 
