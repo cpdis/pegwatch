@@ -30,7 +30,7 @@ from (
          (props->>'legal_area')::numeric as legal_area,
          pw_text(props->'unit_of_me') as area_unit,
          pw_text(props->'special_in') as special_ind,
-         pw_ts_utc(props->'extract_da') as extract_at,
+         pw_ts_local(props->'extract_da') as extract_at,
          pw_local_ts(props->'startdate', props->'starttime') as applied_at,
          pw_local_ts(props->'grantdate', props->'granttime') as granted_at,
          pw_local_ts(props->'enddate', props->'endtime') as ends_at,
@@ -61,7 +61,7 @@ select distinct on (rtrim(props->>'tenid'), pw_local_ts(props->'enddate', props-
        pw_is_company(pw_text(props->'holdername')),
        pw_local_ts(props->'startdate', props->'starttime'),
        pw_local_ts(props->'grantdate', props->'granttime'),
-       pw_ts_utc(props->'extract_date'),
+       pw_ts_local(props->'extract_date'),
        :run_id,
        pw_geom(gj)
 from stg_dead
@@ -79,7 +79,7 @@ insert into release_pending
 select distinct on (rtrim(props->>'tenid'), rtrim(props->>'rlesid'))
        rtrim(props->>'tenid'), rtrim(props->>'rlesid'), pw_text(props->'fmt_tenid'),
        pw_text(props->'ten_type'), pw_text(props->'rles_order'), pw_text(props->'rles_status'),
-       pw_ts_utc(props->'rles_stamp'), pw_geom(gj)
+       pw_ts_local(props->'rles_stamp'), pw_geom(gj)
 from stg_release_pending
 where pw_text(props->'tenid') is not null and pw_text(props->'rlesid') is not null;
 
@@ -91,7 +91,7 @@ insert into amalgamation_pending
 select distinct on (rtrim(props->>'tenid'), rtrim(props->>'amalgid'))
        rtrim(props->>'tenid'), rtrim(props->>'amalgid'), pw_text(props->'fmt_tenid'),
        pw_text(props->'ten_type'), pw_text(props->'amalg_status'),
-       pw_ts_utc(props->'start_stamp'), pw_ts_utc(props->'end_stamp'), pw_geom(gj)
+       pw_ts_local(props->'start_stamp'), pw_ts_local(props->'end_stamp'), pw_geom(gj)
 from stg_amalgamation_pending
 where pw_text(props->'tenid') is not null and pw_text(props->'amalgid') is not null;
 
@@ -100,7 +100,7 @@ insert into restoration_pending
 select distinct on (rtrim(props->>'tenid'), rtrim(props->>'restnid'))
        rtrim(props->>'tenid'), rtrim(props->>'restnid'), pw_text(props->'fmt_tenid'),
        pw_text(props->'ten_type'), pw_text(props->'restn_status'),
-       pw_ts_utc(props->'start_stamp'), pw_ts_utc(props->'end_stamp'), pw_geom(gj)
+       pw_ts_local(props->'start_stamp'), pw_ts_local(props->'end_stamp'), pw_geom(gj)
 from stg_restoration_pending
 where pw_text(props->'tenid') is not null and pw_text(props->'restnid') is not null;
 

@@ -61,7 +61,7 @@ def max_extract(conn: psycopg.Connection, layer: Layer):
         return None
     with conn.cursor() as cur:
         cur.execute(
-            f"select max(pw_ts_utc(props->%s)) from stg_{layer.key}", (layer.extract_field,))
+            f"select max(pw_ts_local(props->%s)) from stg_{layer.key}", (layer.extract_field,))
         return cur.fetchone()[0]
 
 

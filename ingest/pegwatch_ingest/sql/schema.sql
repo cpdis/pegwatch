@@ -16,10 +16,15 @@ language sql immutable as $$
               else pw_date(ms) + coalesce(nullif(trim(hhmmss #>> '{}'), '')::time, time '00:00') end
 $$;
 
-create or replace function pw_ts_utc(ms jsonb) returns timestamptz
+-- Timestamps (extract stamps, release times) are encoded the same way: AWST
+-- wall-clock time written as if it were UTC. Release pending rows show 08:30,
+-- matching the department's 8:30am release time; the live extract is stamped
+-- about 4am, before that day's lodgements (checked against Mining Notices).
+create or replace function pw_ts_local(ms jsonb) returns timestamptz
 language sql immutable as $$
   select case when ms is null or ms = 'null'::jsonb then null
-              else to_timestamp((ms #>> '{}')::double precision / 1000) end
+              else (to_timestamp((ms #>> '{}')::double precision / 1000) at time zone 'UTC')
+                   at time zone 'Australia/Perth' end
 $$;
 
 create or replace function pw_text(v jsonb) returns text

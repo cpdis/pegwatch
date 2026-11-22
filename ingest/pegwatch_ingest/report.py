@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import datetime as dt
+from zoneinfo import ZoneInfo
+
+AWST = ZoneInfo("Australia/Perth")
 
 
 def _rows(conn, sql, params=None):
@@ -47,6 +50,8 @@ def summarise(conn, run_id: int) -> dict:
 
 def _fmt(v) -> str:
     if isinstance(v, dt.datetime):
+        if v.tzinfo is not None:
+            v = v.astimezone(AWST)
         return v.strftime("%Y-%m-%d %H:%M")
     return "" if v is None else str(v)
 
@@ -54,7 +59,7 @@ def _fmt(v) -> str:
 def markdown(s: dict) -> str:
     run = s["run"]
     out = [f"## Pegwatch ingest run {run['id']}: {run['status']}", ""]
-    out.append(f"- Live layer extract: **{_fmt(run['tenements_extract'])} UTC**"
+    out.append(f"- Live layer extract: **{_fmt(run['tenements_extract'])} AWST**"
                f" (previous {_fmt(run['previous_extract']) or 'none'})")
     if run.get("stale"):
         out.append("- **Stale:** the live layer has not been refreshed since the last run.")
@@ -89,7 +94,7 @@ def markdown(s: dict) -> str:
 
 def _history(s: dict) -> list[str]:
     out = ["", "### Spike log (last 30 runs)", "",
-           "| Run | Started (UTC) | Status | Live extract (UTC) | Stale | Apps | Deaths | Events | Notices matched |",
+           "| Run | Started (AWST) | Status | Live extract (AWST) | Stale | Apps | Deaths | Events | Notices matched |",
            "| ---: | --- | --- | --- | --- | ---: | ---: | ---: | --- |"]
     for h in s.get("history", []):
         n = h.get("notices") or {}
