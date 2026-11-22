@@ -1,9 +1,8 @@
-name: CI
+name: ingest tests
 
 on:
-  pull_request:
   push:
-    branches: [main]
+  pull_request:
 
 jobs:
   ingest-tests:
