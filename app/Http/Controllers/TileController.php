@@ -17,7 +17,7 @@ class TileController extends Controller
 {
     private const LAYERS = [
         'tenements' => [
-            'min_zoom' => 5,
+            'min_zoom' => 3,
             // Below z9, simplify to about a pixel and drop tenements smaller than a few pixels.
             'sql' => 'select t.fmt_tenid, t.type_code, t.status, t.holders[1] as holder,
                              ST_AsMVTGeom(case when :z >= 9 then ST_Transform(t.geom, 3857)
@@ -25,7 +25,7 @@ class TileController extends Controller
                                           b.env, 4096, 16, true) as geom
                       from tenements t, b
                       where t.geom && b.env4326
-                        and (:z >= 9 or t.area_ha * 10000 >= 4 * b.px * b.px)',
+                        and (:z >= 9 or t.area_ha * 10000 >= 0.05 * b.px * b.px)',
         ],
         'dead' => [
             'min_zoom' => 6,

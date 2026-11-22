@@ -42,16 +42,32 @@ After each ingest, `POST /hooks/ingest-complete` (bearer token
 run's events to watch areas and sends one digest email per area. The free plan
 has one watch area (a circle up to 50 km) and the death and release alerts.
 
-## Deploying (Laravel Cloud, Sydney)
+## Deploying (Laravel Cloud)
 
-1. Create the app on Laravel Cloud from this repo, add a Postgres database and
-   run `create extension postgis` on it.
-2. Set `PEGWATCH_INGEST_TOKEN` (any long random string) and mail settings in
-   the app's environment.
-3. In GitHub repo secrets, set `PEGWATCH_DATABASE_URL` (the Cloud database
-   URL), `PEGWATCH_HOOK_URL` (`https://<app>/hooks/ingest-complete`) and
-   `PEGWATCH_INGEST_TOKEN`. The nightly job then writes to the app's database
-   and triggers alerts; without them it keeps its own state as an artifact.
+1. In Laravel Cloud, choose **+ New application**, then **Connect to GitHub**,
+   pick `cpdis/pegwatch`, name it, pick the region nearest Perth (Sydney if the
+   Region list offers it) and **Create Application**.
+2. In the environment's settings, set the branch to `main` and PHP 8.4.
+   - Build command: `composer install --no-dev && npm ci --audit false && npm run build && php artisan optimize`
+   - Deploy command: `php artisan migrate --force`
+3. On the environment canvas, **Add database**, then create a **Laravel Serverless
+   Postgres** cluster in the same region with a `pegwatch` database. The first
+   migration runs `create extension if not exists postgis` itself.
+4. Environment variables: `APP_KEY` (from `php artisan key:generate --show`),
+   `PEGWATCH_INGEST_TOKEN` (any long random string), and mail settings
+   (`MAIL_MAILER`, `MAIL_FROM_ADDRESS`, plus your provider's keys). Cache and
+   sessions use the database by default, which suits Cloud's ephemeral disk.
+5. **Deploy**. The app gets a free `*.laravel.cloud` domain; add `pegwatch.au`
+   later under **Network settings**, then **Add domain**.
+6. Point the nightly ingest at the app's database. In Cloud, open
+   **Resources**, then **Databases**, then the cluster, then **View
+   credentials**. In GitHub (**Settings**, then **Secrets and variables**,
+   then **Actions**) add:
+   - `PEGWATCH_DATABASE_URL`: `postgresql://USER:PASSWORD@HOST/pegwatch?sslmode=require`
+   - `PEGWATCH_HOOK_URL`: `https://<your app>.laravel.cloud/hooks/ingest-complete`
+   - `PEGWATCH_INGEST_TOKEN`: the same value as in Cloud
+   The next nightly run takes a fresh baseline in that database (about a
+   minute); changes and alerts start the night after.
 
 ## Ingest (`ingest/`)
 

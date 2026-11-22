@@ -94,7 +94,7 @@ export default function TenementMap({
 
         m.on('load', () => {
             const tiles = (layer: string) => ({ type: 'vector' as const, tiles: [`${origin}/tiles/${layer}/{z}/{x}/{y}.mvt`], maxzoom: 14 });
-            m.addSource('tenements', { ...tiles('tenements'), minzoom: 5 });
+            m.addSource('tenements', { ...tiles('tenements'), minzoom: 3 });
             m.addSource('dead', { ...tiles('dead'), minzoom: 6 });
             m.addSource('releases', tiles('releases'));
             m.addSource('restrictions', { ...tiles('restrictions'), minzoom: 5 });
