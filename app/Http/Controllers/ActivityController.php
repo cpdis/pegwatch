@@ -12,10 +12,10 @@ class ActivityController extends Controller
     public function index(Request $request): Response
     {
         $type = $request->query('type');
-        if ($type !== null && ! array_key_exists($type, Register::EVENT_LABELS)) {
+        if (! is_string($type) || ! array_key_exists($type, Register::EVENT_LABELS)) {
             $type = null;
         }
-        $page = max(1, (int) $request->query('page', 1));
+        $page = min(10000, max(1, (int) $request->integer('page', 1)));
         $perPage = 50;
         $filter = $type ? ['type' => $type] : [];
 

@@ -151,4 +151,49 @@ class PegwatchTest extends TestCase
         $this->withToken('secret')->postJson('/hooks/ingest-complete', ['run_id' => $runId])
             ->assertOk()->assertJsonPath('run_id', $runId);
     }
+
+    public function test_free_plan_rejects_event_types_sent_as_an_object(): void
+    {
+        Mail::fake();
+        $runId = self::seedRegister();
+        $user = User::factory()->create();
+        $this->actingAs($user)->post('/watch-areas', [
+            'name' => 'x', 'latitude' => -30.8, 'longitude' => 121.5, 'radius_km' => 5,
+            'event_types' => ['application' => 'death'],
+        ])->assertSessionHasErrors('event_types');
+
+        // A row stored as an object (keys are not elements) still matches nothing.
+        DB::insert("insert into watch_areas (user_id, name, latitude, longitude, radius_km, event_types, created_at, updated_at)
+            values (?, 'x', -30.8, 121.5, 5, '{\"application\": \"death\"}', now(), now())", [$user->id]);
+        $this->assertSame(['matched' => 0, 'emails' => 0], app(AlertMatcher::class)->run($runId));
+    }
+
+    public function test_release_summaries_are_in_awst(): void
+    {
+        $runId = self::seedRegister();
+        DB::insert("insert into tenement_events (run_id, event_type, tenid, fmt_tenid, details, occurred_at, geom)
+            values (?, 'release_scheduled', 'E  1500001', 'E 15/1',
+                    jsonb_build_object('release_id', 'R1', 'release_at', timestamptz '2026-12-01 08:30+08'), '2026-12-01 08:30', ?::geometry)",
+            [$runId, self::square(121.50, -30.80)]);
+
+        $this->get('/activity?type=release_scheduled')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('events.0.summary', 'R1 at 1 Dec 2026 08:30 AWST'));
+    }
+
+    public function test_malformed_query_input_is_ignored_not_a_server_error(): void
+    {
+        self::seedRegister();
+        foreach (['/activity?type[]=x', '/activity?page=99999999999999999999', '/search?q[]=ab', '/search?q=%FF%FE'] as $url) {
+            $this->get($url)->assertOk();
+        }
+        $this->get('/tiles/tenements/99999999999999999999/0/0.mvt')->assertNotFound();
+    }
+
+    public function test_pages_render_tenements_with_no_type(): void
+    {
+        self::seedRegister();
+        DB::update("update tenements set type = null, status = null where tenid = 'P  1500002'");
+        $this->get('/holders/smith-john')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('tenements.0.type', null));
+    }
 }

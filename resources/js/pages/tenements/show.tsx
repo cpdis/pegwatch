@@ -28,7 +28,7 @@ interface Props {
     geometry: GeoJSON.Geometry | null;
     bbox: [number, number, number, number] | null;
     events: TenementEvent[];
-    overlaps: { fmt_tenid: string; slug: string; type: string; status: string; share: number }[];
+    overlaps: { fmt_tenid: string; slug: string; type: string | null; status: string | null; share: number }[];
     releases: { rlesid: string; release_at: string }[];
     run: Run | null;
 }
@@ -93,7 +93,7 @@ export default function TenementShow({ tenement: t, geometry, bbox, events, over
                                             {o.fmt_tenid}
                                         </Link>{' '}
                                         <span className="text-muted-foreground">
-                                            {o.type.toLowerCase()}, {o.status.toLowerCase()}, over {pct(o.share)} of this one
+                                            {o.type?.toLowerCase() ?? 'unknown type'}, {o.status?.toLowerCase()}, over {pct(o.share)} of this one
                                         </span>
                                     </li>
                                 ))}

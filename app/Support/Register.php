@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -290,15 +291,28 @@ class Register
             'holder_change' => 'Added: '.implode(', ', $d['added'] ?? []).'; removed: '.implode(', ', $d['removed'] ?? []),
             'shrink' => ($d['changed_ha'] ?? '?').' ha removed'.(($d['released'] ?? false) ? ' (compulsory surrender)' : ''),
             'grow' => ($d['changed_ha'] ?? '?').' ha added',
-            'release_scheduled', 'released', 'release_cancelled' => ($d['release_id'] ?? '').' at '.($d['release_at'] ?? '?'),
+            'release_scheduled', 'released', 'release_cancelled' => ($d['release_id'] ?? '').' at '.self::awst($d['release_at'] ?? null),
             'status_change' => ($d['from'] ?? '?').' to '.($d['to'] ?? '?'),
             default => '',
         };
     }
 
+    /** Render a stored timestamptz (ISO 8601 with offset) as AWST wall-clock time. */
+    private static function awst(?string $ts): string
+    {
+        if ($ts === null || $ts === '') {
+            return '?';
+        }
+        try {
+            return CarbonImmutable::parse($ts)->setTimezone('Australia/Perth')->format('j M Y H:i').' AWST';
+        } catch (\Throwable) {
+            return $ts;
+        }
+    }
+
     public static function search(string $q, int $limit = 10): array
     {
-        $q = trim($q);
+        $q = mb_check_encoding($q, 'UTF-8') ? trim($q) : '';
         if (mb_strlen($q) < 2) {
             return ['tenements' => [], 'holders' => []];
         }

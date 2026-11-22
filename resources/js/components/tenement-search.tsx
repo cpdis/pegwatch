@@ -2,7 +2,7 @@ import { router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 
 interface Results {
-    tenements: { fmt_tenid: string; slug: string; type: string; status: string }[];
+    tenements: { fmt_tenid: string; slug: string; type: string | null; status: string | null }[];
     holders: { name: string; slug: string; count: number }[];
 }
 
@@ -57,7 +57,7 @@ export default function TenementSearch() {
                             <button className="hover:bg-accent w-full px-3 py-1.5 text-left" onMouseDown={() => go(`/tenements/${t.slug}`)}>
                                 <span className="font-medium">{t.fmt_tenid}</span>{' '}
                                 <span className="text-muted-foreground">
-                                    {t.type.toLowerCase()} · {t.status.toLowerCase()}
+                                    {t.type?.toLowerCase()} · {t.status?.toLowerCase()}
                                 </span>
                             </button>
                         </li>

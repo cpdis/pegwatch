@@ -16,7 +16,7 @@ Route::get('/activity', [ActivityController::class, 'index'])->name('activity');
 Route::get('/tenements/{slug}', [TenementController::class, 'show'])->name('tenements.show');
 Route::get('/holders/{slug}', [HolderController::class, 'show'])->name('holders.show');
 Route::get('/tiles/{layer}/{z}/{x}/{y}.mvt', [TileController::class, 'show'])
-    ->whereNumber(['z', 'x', 'y'])->name('tiles');
+    ->where(['z' => '[0-9]{1,2}', 'x' => '[0-9]{1,7}', 'y' => '[0-9]{1,7}'])->name('tiles');
 
 Route::post('/hooks/ingest-complete', IngestHookController::class)
     ->withoutMiddleware([ValidateCsrfToken::class])->name('hooks.ingest');

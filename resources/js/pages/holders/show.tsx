@@ -13,8 +13,8 @@ interface Props {
     tenements: {
         fmt_tenid: string;
         slug: string;
-        type: string;
-        status: string;
+        type: string | null;
+        status: string | null;
         applied_at: string | null;
         granted_at: string | null;
         ends_at: string | null;
@@ -95,8 +95,8 @@ export default function HolderShow({ holder, summary, bbox, tenements, dead, app
                                         {t.fmt_tenid}
                                     </Link>
                                 </td>
-                                <td>{t.type.toLowerCase()}</td>
-                                <td>{t.status.toLowerCase()}</td>
+                                <td>{t.type?.toLowerCase()}</td>
+                                <td>{t.status?.toLowerCase()}</td>
                                 <td>{localDate(t.applied_at)}</td>
                                 <td>{expiry(t.ends_at)}</td>
                                 <td className="text-right">{t.area_ha?.toLocaleString()}</td>

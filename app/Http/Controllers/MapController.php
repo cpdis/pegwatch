@@ -21,6 +21,6 @@ class MapController extends Controller
 
     public function search(Request $request): JsonResponse
     {
-        return response()->json(Register::search((string) $request->query('q', '')));
+        return response()->json(Register::search(is_string($q = $request->query('q')) ? $q : ''));
     }
 }

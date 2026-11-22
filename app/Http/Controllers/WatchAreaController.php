@@ -40,19 +40,28 @@ class WatchAreaController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        if ($request->user()->watchAreas()->count() >= self::FREE_LIMIT) {
-            return back()->withErrors(['name' => 'The free plan includes one watch area. Delete it to add another.']);
-        }
         $data = $request->validate([
             'name' => ['required', 'string', 'max:80'],
             // Roughly WA, with a margin
             'latitude' => ['required', 'numeric', 'between:-36,-13'],
             'longitude' => ['required', 'numeric', 'between:112,130'],
             'radius_km' => ['required', 'numeric', 'min:0.5', 'max:'.WatchArea::MAX_RADIUS_KM],
-            'event_types' => ['required', 'array', 'min:1'],
+            'event_types' => ['required', 'array', 'list', 'min:1'],
             'event_types.*' => [Rule::in(WatchArea::FREE_EVENT_TYPES)],
         ]);
-        $request->user()->watchAreas()->create($data);
+        // Lock the user row so parallel requests cannot each pass the limit check.
+        $created = DB::transaction(function () use ($request, $data) {
+            $user = $request->user()::query()->whereKey($request->user()->id)->lockForUpdate()->first();
+            if ($user->watchAreas()->count() >= self::FREE_LIMIT) {
+                return false;
+            }
+            $user->watchAreas()->create([...$data, 'event_types' => array_values(array_unique($data['event_types']))]);
+
+            return true;
+        });
+        if (! $created) {
+            return back()->withErrors(['name' => 'The free plan includes one watch area. Delete it to add another.']);
+        }
 
         return to_route('watch-areas.index');
     }

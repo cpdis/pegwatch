@@ -22,7 +22,7 @@ class AlertMatcher
              select w.id, e.id, now(), now()
              from watch_areas w
              join tenement_events e on e.geom && w.area and ST_Intersects(e.geom, w.area)
-             where e.run_id = ? and jsonb_exists(w.event_types, e.event_type)
+             where e.run_id = ? and w.event_types @> jsonb_build_array(e.event_type)
              on conflict (watch_area_id, tenement_event_id) do nothing',
             [$runId]
         );
