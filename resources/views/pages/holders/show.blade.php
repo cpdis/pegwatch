@@ -7,17 +7,20 @@ use Livewire\Component;
 new class extends Component {
     public string $slug;
 
+    protected ?array $data = null;
+
     public bool $showAll = false;
 
     public function mount(string $slug): void
     {
-        abort_unless(Register::holder($slug), 404);
+        // Kept for this request's render, so the first page load queries once.
+        abort_unless($this->data = Register::holder($slug), 404);
         $this->slug = $slug;
     }
 
     public function render()
     {
-        $data = Register::holder($this->slug);
+        $data = $this->data ?? Register::holder($this->slug);
 
         return $this->view(['data' => $data])->title($data['holder']['name']);
     }
@@ -34,7 +37,8 @@ new class extends Component {
 <div>
     <flux:heading size="xl" level="1">{{ $data['holder']['name'] }}</flux:heading>
     <flux:text class="mt-1">
-        {{ $s['live'] }} live, {{ $s['pending'] }} pending, {{ number_format($s['area_ha']) }} ha mapped. {{ $s['dead'] }} dead tenements on record.
+        {{ number_format($s['live']) }} live, {{ number_format($s['pending']) }} pending, {{ number_format($s['area_ha']) }} ha mapped.
+        {{ trans_choice('{0} No dead tenements on record.|{1} 1 dead tenement on record.|[2,*] :n dead tenements on record.', $s['dead'], ['n' => number_format($s['dead'])]) }}
         @unless ($data['holder']['is_company']) {{ __('Shown by name only, as on the public register.') }} @endunless
     </flux:text>
 
@@ -73,7 +77,7 @@ new class extends Component {
     </div>
 
     <flux:heading class="mt-8">{{ __('Tenements') }} ({{ count($data['tenements']) }})</flux:heading>
-    <flux:table class="mt-2">
+    <flux:table class="mt-2 tabular-nums">
         <flux:table.columns>
             <flux:table.column>{{ __('Tenement') }}</flux:table.column>
             <flux:table.column>{{ __('Type') }}</flux:table.column>

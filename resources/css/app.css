@@ -64,3 +64,16 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+/* Phones: no grey flash on tap, and no double-tap delay on controls. */
+html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+}
+
+a,
+button,
+label,
+[role='button'] {
+    touch-action: manipulation;
+}
