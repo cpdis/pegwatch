@@ -42,6 +42,8 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
+        env:
+          COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       # Flux's CSS is imported from vendor/, so Composer goes first.

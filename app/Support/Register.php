@@ -238,6 +238,14 @@ class Register
             $where[] = 'e.event_type = ?';
             $bind[] = $filter['type'];
         }
+        if (isset($filter['from'])) {
+            $where[] = "(e.created_at at time zone 'Australia/Perth')::date >= ?::date";
+            $bind[] = $filter['from'];
+        }
+        if (isset($filter['to'])) {
+            $where[] = "(e.created_at at time zone 'Australia/Perth')::date <= ?::date";
+            $bind[] = $filter['to'];
+        }
         if (isset($filter['run_id'])) {
             $where[] = 'e.run_id = ?';
             $bind[] = $filter['run_id'];

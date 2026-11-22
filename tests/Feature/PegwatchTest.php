@@ -59,7 +59,7 @@ class PegwatchTest extends TestCase
         self::seedRegister();
 
         $this->get('/tenements/e-15-1')->assertOk()
-            ->assertSeeInOrder(['E 15/1', 'ACME GOLD PTY LTD', 'Overlapping tenements', 'P 15/2']);
+            ->assertSeeInOrder(['E 15/1', 'ACME GOLD PTY LTD', 'Overlapping (1)', 'P 15/2']);
         $this->get('/tenements/nope-1')->assertNotFound();
 
         $this->get('/tenements/e-99-999')->assertNotFound();
