@@ -1,0 +1,120 @@
+name: Nightly ingest
+
+# Pulls the SLIP tenement layers into PostGIS, diffs against last night's
+# snapshot and logs the result.
+#
+# Where the database lives:
+# - With the PEGWATCH_DATABASE_URL secret set (the app's Postgres on Laravel
+#   Cloud), the ingest writes straight to it.
+# - Without it (the data spike), the database lives in a workflow artifact:
+#   each run restores the previous successful run's state.
+on:
+  schedule:
+    - cron: "0 11 * * *"   # 7pm AWST; the live layer is stamped around midday
+  workflow_dispatch:
+    inputs:
+      full_dead:
+        description: "Load the whole DEAD layer (one-off, ~423k rows)"
+        type: boolean
+        default: false
+      fresh:
+        description: "Ignore previous state and take a new baseline"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: nightly-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: pegwatch
+          POSTGRES_PASSWORD: pegwatch
+          POSTGRES_DB: pegwatch
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pegwatch" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: ${{ secrets.PEGWATCH_DATABASE_URL || 'postgresql://pegwatch:pegwatch@localhost:5432/pegwatch' }}
+      USE_ARTIFACT: ${{ secrets.PEGWATCH_DATABASE_URL == '' }}
+      PGPASSWORD: pegwatch
+      # Set these repo secrets once the app is deployed (see README).
+      HOOK_URL: ${{ secrets.PEGWATCH_HOOK_URL }}
+      HOOK_TOKEN: ${{ secrets.PEGWATCH_INGEST_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ingest
+        run: pip install ./ingest
+
+      - name: Install Postgres 16 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -q && sudo apt-get install -y -q postgresql-client-16
+
+      - name: Restore previous state
+        if: ${{ env.USE_ARTIFACT == 'true' && !inputs.fresh }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly-ingest.yml --status success \
+                     --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$run_id" ]; then echo "No previous state: this run is the baseline."; exit 0; fi
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name pegwatch-state --dir state
+          psql "$DATABASE_URL" -c "create extension if not exists postgis"
+          /usr/lib/postgresql/16/bin/pg_restore --no-owner --exit-on-error --dbname "$DATABASE_URL" state/state.dump
+          echo "Restored state from run $run_id"
+
+      - name: Ingest
+        run: |
+          args="--report-dir report"
+          if [ "${{ inputs.full_dead }}" = "true" ]; then args="$args --full-dead"; fi
+          python -m pegwatch_ingest $args
+          cat report/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tell the app to send alerts
+        if: ${{ env.HOOK_URL != '' }}
+        run: |
+          curl -fsS -X POST -H "Authorization: Bearer $HOOK_TOKEN" -H "Accept: application/json" "$HOOK_URL"
+
+      - name: Save state
+        if: ${{ env.USE_ARTIFACT == 'true' }}
+        run: |
+          mkdir -p state
+          # The postgis image also creates topology and tiger schemas; they are
+          # recreated on restore, so leave them out of the dump.
+          /usr/lib/postgresql/16/bin/pg_dump -Fc --no-owner --exclude-table 'stg_*' \
+            --exclude-schema tiger --exclude-schema tiger_data --exclude-schema topology \
+            --exclude-table-data 'tenements_prev' --exclude-table-data '*_pending_prev' \
+            --exclude-table-data 'land_restrictions' \
+            "$DATABASE_URL" -f state/state.dump
+          ls -lh state
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ env.USE_ARTIFACT == 'true' }}
+        with:
+          name: pegwatch-state
+          path: state/state.dump
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report
+          path: report/
+          retention-days: 90
