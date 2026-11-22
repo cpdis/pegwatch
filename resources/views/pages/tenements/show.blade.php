@@ -66,20 +66,25 @@ new class extends Component {
             </flux:callout>
         @endif
 
-        @if (count($data['overlaps']))
-            <flux:heading class="mt-6">{{ __('Overlapping tenements') }}</flux:heading>
-            <ul class="mt-1 text-sm">
-                @foreach ($data['overlaps'] as $o)
-                    <li>
-                        <flux:link :href="route('tenements.show', $o['slug'])" wire:navigate>{{ $o['fmt_tenid'] }}</flux:link>
-                        <span class="text-zinc-500">{{ Format::lower($o['type']) ?: __('unknown type') }}, {{ Format::lower($o['status']) }}, {{ __('over') }} {{ Format::pct($o['share']) }} {{ __('of this one') }}</span>
-                    </li>
-                @endforeach
-            </ul>
-        @endif
-
-        <flux:heading class="mt-6">{{ __('History seen by Pegwatch') }}</flux:heading>
-        <x-event-list :events="$data['events']" />
+        <flux:tab.group class="mt-6">
+            <flux:tabs size="sm">
+                <flux:tab name="history">{{ __('History seen by Pegwatch') }}</flux:tab>
+                <flux:tab name="overlaps" :disabled="! count($data['overlaps'])">{{ __('Overlapping') }} ({{ count($data['overlaps']) }})</flux:tab>
+            </flux:tabs>
+            <flux:tab.panel name="history">
+                <x-event-list :events="$data['events']" />
+            </flux:tab.panel>
+            <flux:tab.panel name="overlaps">
+                <ul class="text-sm">
+                    @foreach ($data['overlaps'] as $o)
+                        <li>
+                            <flux:link :href="route('tenements.show', $o['slug'])" wire:navigate>{{ $o['fmt_tenid'] }}</flux:link>
+                            <span class="text-zinc-500">{{ Format::lower($o['type']) ?: __('unknown type') }}, {{ Format::lower($o['status']) }}, {{ __('over') }} {{ Format::pct($o['share']) }} {{ __('of this one') }}</span>
+                        </li>
+                    @endforeach
+                </ul>
+            </flux:tab.panel>
+        </flux:tab.group>
     </div>
     <div class="md:col-span-3">
         <div wire:ignore x-data="tenementMap({ bounds: @js($data['bbox']), highlight: @js($data['geometry']) })" class="h-[480px] w-full overflow-hidden rounded-lg">

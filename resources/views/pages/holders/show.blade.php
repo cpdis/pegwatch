@@ -25,7 +25,7 @@ new class extends Component {
 
 @php
     $months = $data['applications_by_month'];
-    $max = max(1, ...array_column($months, 'n'));
+    $chart = array_map(fn ($m) => ['date' => $m['month'].'-01', 'n' => $m['n']], $months);
     $none = array_sum(array_column($months, 'n')) === 0;
     $tenements = $showAll ? $data['tenements'] : array_slice($data['tenements'], 0, 50);
     $s = $data['summary'];
@@ -49,15 +49,23 @@ new class extends Component {
             @if ($none)
                 <flux:text>{{ __('None still live or pending.') }}</flux:text>
             @else
-                <div class="mt-2 flex h-32 items-end gap-0.5" role="img" aria-label="{{ __('Applications per month') }}">
-                    @foreach ($months as $m)
-                        <div class="flex-1 rounded-t-sm bg-zinc-700/70 dark:bg-zinc-300/70" title="{{ $m['month'] }}: {{ $m['n'] }}"
-                             style="height: {{ $m['n'] / $max * 100 }}%; min-height: {{ $m['n'] ? 2 : 0 }}px"></div>
-                    @endforeach
-                </div>
-                <div class="flex justify-between text-xs text-zinc-500">
-                    <span>{{ $months[0]['month'] }}</span><span>{{ end($months)['month'] }}</span>
-                </div>
+                <flux:chart :value="$chart" class="mt-2 aspect-[2/1]">
+                    <flux:chart.svg>
+                        <flux:chart.bar field="n" class="text-zinc-700 dark:text-zinc-300" />
+                        <flux:chart.axis axis="x" field="date" :format="['month' => 'short', 'year' => '2-digit']">
+                            <flux:chart.axis.tick />
+                            <flux:chart.axis.line />
+                        </flux:chart.axis>
+                        <flux:chart.axis axis="y" tick-count="3">
+                            <flux:chart.axis.grid />
+                            <flux:chart.axis.tick />
+                        </flux:chart.axis>
+                    </flux:chart.svg>
+                    <flux:chart.tooltip>
+                        <flux:chart.tooltip.heading field="date" :format="['month' => 'long', 'year' => 'numeric']" />
+                        <flux:chart.tooltip.value field="n" :label="__('Applications')" />
+                    </flux:chart.tooltip>
+                </flux:chart>
             @endif
             <flux:heading class="mt-6">{{ __('Recent changes') }}</flux:heading>
             <x-event-list :events="$data['events']" compact />
