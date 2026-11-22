@@ -82,7 +82,14 @@ class PegwatchTest extends TestCase
 
         Livewire::test('search')->set('q', 'E15/1')->assertSee('E 15/1')
             ->set('q', 'acme')->assertSee('ACME GOLD PTY LTD')
-            ->set('q', 'E15/1')->call('go')->assertRedirect('/tenements/e-15-1');
+            ->set('q', 'E15/1')->call('go')->assertRedirect('/tenements/e-15-1')
+            ->call('open', 'holder', 'acme-gold-pty-ltd')->assertRedirect('/holders/acme-gold-pty-ltd')
+            ->assertSet('q', '');
+
+        // One palette per page, opened from the header or with Cmd/Ctrl+K.
+        $html = $this->get('/activity')->assertOk()->getContent();
+        $this->assertSame(1, substr_count($html, 'data-flux-command>'));
+        $this->assertStringContainsString('keydown.cmd.k.document', $html);
     }
 
     public function test_vector_tiles_are_served_from_postgis(): void
