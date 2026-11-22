@@ -41,6 +41,15 @@ new #[Layout('layouts::map'), Title('WA tenement map')] class extends Component 
             {{ __('Free email alerts when a tenement near you is recorded dead or has ground scheduled for release.') }}
         </flux:text>
 
+        @guest
+            <div class="my-5 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                <flux:heading size="sm">{{ __('The week on the WA register, every Monday') }}</flux:heading>
+                <flux:text class="mt-1 mb-2 text-sm">{{ __('Ground left open by dead tenements, the biggest new applications and the releases coming up.') }}
+                    <flux:link :href="route('digest')" wire:navigate>{{ __('See an issue') }}</flux:link></flux:text>
+                <livewire:digest-signup source="map" compact />
+            </div>
+        @endguest
+
         <flux:checkbox.group :label="__('Layers')" class="mt-4">
             @foreach ($layerLabels as $key => $label)
                 <flux:checkbox x-model="layers.{{ $key }}" :label="$label" />

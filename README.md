@@ -44,6 +44,25 @@ After each ingest, `POST /hooks/ingest-complete` (bearer token
 run's events to watch areas and sends one digest email per area. The free plan
 has one watch area (a circle up to 50 km) and the death and release alerts.
 
+## Weekly digest
+
+The demand test's email list: `/digest` and a box on the map take an email
+address (no account), confirm it by double opt-in, and send one state-wide
+summary a week: deaths ranked by the ground they left with no other tenement
+over it, the biggest new applications and their applicants, and the
+compulsory releases due in the next seven days. Each issue is stored and has
+a public page at `/digest/{week}`.
+
+The ingest hook builds and sends the issue after the first run on or after
+`PEGWATCH_DIGEST_DAY` (ISO weekday, default 1 = Monday, so Monday about 7pm
+AWST). Sending is resumable: each delivery is recorded, a hook call stops
+after about 40 seconds, and the rest go out on the next call or with
+`php artisan pegwatch:send-digest`. Every email carries a one-click
+`List-Unsubscribe` header (RFC 8058) and an unsubscribe link.
+
+`php artisan pegwatch:demand` prints sign-ups by source. Links with
+`?ref=<tag>` (or `utm_source`) record the tag against the sign-up.
+
 ## Deploying (Laravel Cloud)
 
 1. In Laravel Cloud, choose **+ New application**, then **Connect to GitHub**,
