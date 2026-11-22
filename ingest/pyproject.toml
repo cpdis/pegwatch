@@ -1,0 +1,22 @@
+[project]
+name = "pegwatch-ingest"
+version = "0.1.0"
+description = "Nightly WA tenement ingest from SLIP into PostGIS, with snapshot diffs"
+requires-python = ">=3.11"
+dependencies = ["psycopg[binary]>=3.2", "requests>=2.31"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+pegwatch-ingest = "pegwatch_ingest.run:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pegwatch_ingest*"]
+
+[tool.setuptools.package-data]
+pegwatch_ingest = ["sql/*.sql"]
