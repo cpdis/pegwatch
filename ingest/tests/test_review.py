@@ -85,6 +85,15 @@ def test_dead_layer_rows_per_holder_are_folded_with_real_times(conn):
     assert ended == dt.datetime(2026, 11, 19, 10, 0)
 
 
+def test_dead_row_with_placeholder_end_date_is_skipped(conn):
+    a = dead("E 01/3", "Surrendered", square(120.2, -30))
+    b = dead("WR 38/80", "Null and Void", square(120.4, -30))
+    b["properties"]["objectid"] += 1
+    b["properties"]["enddate"] = 32503593600000  # 2999-12-31
+    stage(conn, night1(), dead_rows=[a, b]); go()
+    assert rows(conn, "select fmt_tenid from dead_tenements") == [("E 01/3",)]
+
+
 def test_moved_release_is_reported_and_an_empty_release_layer_aborts(conn):
     t1 = int((dt.datetime.now(dt.UTC) + dt.timedelta(days=14)).timestamp() * 1000)
     stage(conn, night1(), releases=[release("E 01/9", "R1", square(120.6, -30), t1)]); go()

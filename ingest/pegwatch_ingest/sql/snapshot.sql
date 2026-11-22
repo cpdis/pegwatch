@@ -70,7 +70,10 @@ from (
          max(pw_ts_local(props->'extract_date')) as extract_at,
          (array_agg(pw_geom(gj) order by oid) filter (where gj is not null))[1] as geom
   from stg_dead
-  where pw_text(props->'tenid') is not null and pw_date(props->'enddate') is not null
+  -- pw_local_ts, not pw_date: some long-void rows carry the 2999-12-31
+  -- placeholder end date, which is null here and has no death to record.
+  where pw_text(props->'tenid') is not null
+    and pw_local_ts(props->'enddate', props->'endtime') is not null
   group by 1, 2
 ) d
 on conflict (tenid, ended_at) do update
