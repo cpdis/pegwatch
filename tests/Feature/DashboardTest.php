@@ -12,14 +12,16 @@ class DashboardTest extends TestCase
 
     public function test_guests_are_redirected_to_the_login_page(): void
     {
-        $this->get('/watch-areas')->assertRedirect('/login');
+        $response = $this->get(route('dashboard'));
+        $response->assertRedirect(route('login'));
     }
 
-    public function test_dashboard_sends_signed_in_users_to_their_watch_area(): void
+    public function test_the_dashboard_is_the_watch_area_page(): void
     {
-        $this->actingAs(User::factory()->create());
+        $user = User::factory()->create();
+        $this->actingAs($user);
 
-        $this->get('/dashboard')->assertRedirect('/watch-areas');
+        $this->get(route('dashboard'))->assertRedirect('/watch-areas');
         $this->get('/watch-areas')->assertOk();
     }
 }

@@ -14,6 +14,7 @@ class Register
     public const EVENT_LABELS = [
         'application' => 'New application',
         'appeared' => 'Appeared on the register',
+        'reappeared' => 'Back on the register',
         'death' => 'Tenement recorded dead',
         'grant' => 'Granted',
         'status_change' => 'Status changed',
@@ -56,7 +57,7 @@ class Register
         $dead = null;
         if (! $t) {
             $dead = DB::selectOne(
-                'select tenid, fmt_tenid, type, death_reason, holder_name, holder_is_company, started_at,
+                'select tenid, fmt_tenid, type, death_reason, holders, holders_are_company, started_at,
                         granted_at, ended_at, extract_at, ST_AsGeoJSON(geom, 6) as geojson,
                         ST_AsGeoJSON(ST_Envelope(geom)) as bbox
                  from dead_tenements where pw_slug(fmt_tenid) = ? order by ended_at desc limit 1',
@@ -92,9 +93,7 @@ class Register
                 'type_code' => null,
                 'status' => 'DEAD',
                 'survey_status' => null,
-                'holders' => $dead->holder_name
-                    ? Holders::present([$dead->holder_name], [$dead->holder_is_company])
-                    : [],
+                'holders' => Holders::present(PgArray::parse($dead->holders), PgArray::parse($dead->holders_are_company)),
                 'legal_area' => null,
                 'area_unit' => null,
                 'area_ha' => null,
@@ -147,9 +146,12 @@ class Register
             [$slug]
         );
         $dead = DB::select(
-            'select fmt_tenid, type, death_reason, ended_at, holder_name, holder_is_company
-             from dead_tenements where pw_slug(holder_name) = ? order by ended_at desc limit 200',
-            [$slug]
+            'select d.fmt_tenid, d.type, d.death_reason, d.ended_at, h.name as holder_name, h.is_company as holder_is_company
+             from dead_tenements d
+             cross join lateral unnest(d.holders, d.holders_are_company) as h(name, is_company)
+             where pw_slugs(d.holders) @> array[?]::text[] and pw_slug(h.name) = ?
+             order by d.ended_at desc limit 200',
+            [$slug, $slug]
         );
         if (! $rows && ! $dead) {
             return null;
@@ -180,7 +182,7 @@ class Register
         for ($i = 0; $i < 24; $i++) {
             $key = $cursor->format('Y-m');
             $months[] = ['month' => $key, 'n' => (int) ($counts[$key] ?? 0)];
-            $cursor->addMonth();
+            $cursor = $cursor->addMonth();
         }
 
         return [
@@ -293,6 +295,7 @@ class Register
             'grow' => ($d['changed_ha'] ?? '?').' ha added',
             'release_scheduled', 'released', 'release_cancelled' => ($d['release_id'] ?? '').' at '.self::awst($d['release_at'] ?? null),
             'status_change' => ($d['from'] ?? '?').' to '.($d['to'] ?? '?'),
+            'reappeared' => 'Back after being recorded dead',
             default => '',
         };
     }

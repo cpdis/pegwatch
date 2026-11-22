@@ -9,7 +9,7 @@ use App\Models\WatchArea;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Inertia\Testing\AssertableInertia as Assert;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class PegwatchTest extends TestCase
@@ -48,24 +48,19 @@ class PegwatchTest extends TestCase
     {
         self::seedRegister();
 
-        $this->get('/')->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->component('map')
-            ->where('totals.LIVE', 1)
-            ->where('totals.PENDING', 1)
-            ->has('events', 2)
-            ->where('events.1.summary', 'Surrendered. 97% of its area has no other tenement over it.'));
+        $this->get('/')->assertOk()
+            ->assertSee('1 live and 1 pending')
+            ->assertSee('P 15/9')
+            ->assertSee('Surrendered. 97% of its area has no other tenement over it.');
     }
 
     public function test_tenement_page_shows_holders_and_overlaps(): void
     {
         self::seedRegister();
 
-        $this->get('/tenements/e-15-1')->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->component('tenements/show')
-            ->where('tenement.fmt_tenid', 'E 15/1')
-            ->where('tenement.holders.0.name', 'ACME GOLD PTY LTD')
-            ->where('tenement.holders.0.is_company', true)
-            ->where('overlaps.0.fmt_tenid', 'P 15/2'));
+        $this->get('/tenements/e-15-1')->assertOk()
+            ->assertSeeInOrder(['E 15/1', 'ACME GOLD PTY LTD', 'Overlapping tenements', 'P 15/2']);
+        $this->get('/tenements/nope-1')->assertNotFound();
 
         $this->get('/tenements/e-99-999')->assertNotFound();
     }
@@ -74,20 +69,20 @@ class PegwatchTest extends TestCase
     {
         self::seedRegister();
 
-        $this->get('/holders/smith-john')->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->component('holders/show')
-            ->where('holder.is_company', false)
-            ->where('summary.pending', 1)
-            ->has('applications_by_month', 24)
-            ->has('events', 1));
+        $this->get('/holders/smith-john')->assertOk()
+            ->assertSee('SMITH, JOHN')
+            ->assertSee('0 live, 1 pending')
+            ->assertSee('Shown by name only')
+            ->assertSee('P 15/2');
     }
 
     public function test_search_finds_tenements_by_compact_id_and_holders_by_name(): void
     {
         self::seedRegister();
 
-        $this->getJson('/search?q=E15/1')->assertOk()->assertJsonPath('tenements.0.fmt_tenid', 'E 15/1');
-        $this->getJson('/search?q=acme')->assertOk()->assertJsonPath('holders.0.slug', 'acme-gold-pty-ltd');
+        Livewire::test('search')->set('q', 'E15/1')->assertSee('E 15/1')
+            ->set('q', 'acme')->assertSee('ACME GOLD PTY LTD')
+            ->set('q', 'E15/1')->call('go')->assertRedirect('/tenements/e-15-1');
     }
 
     public function test_vector_tiles_are_served_from_postgis(): void
@@ -111,11 +106,13 @@ class PegwatchTest extends TestCase
     {
         $user = User::factory()->create();
         $this->actingAs($user);
+        $this->get('/watch-areas')->assertOk()->assertSee('My watch area');
         $area = ['name' => 'Kal east', 'latitude' => -30.8, 'longitude' => 121.5, 'radius_km' => 5, 'event_types' => ['death']];
 
-        $this->post('/watch-areas', $area)->assertRedirect('/watch-areas');
-        $this->post('/watch-areas', $area)->assertSessionHasErrors('name');
-        $this->post('/watch-areas', [...$area, 'event_types' => ['application']])->assertSessionHasErrors();
+        $page = fn (array $data) => Livewire::test('pages::watch-areas')->set($data)->call('save');
+        $page($area)->assertHasNoErrors();
+        $page($area)->assertHasErrors('name');
+        $page([...$area, 'event_types' => ['application']])->assertHasErrors('event_types.0');
 
         $this->assertSame(1, $user->watchAreas()->count());
         $km2 = DB::scalar('select ST_Area(area::geography) / 1e6 from watch_areas');
@@ -157,10 +154,11 @@ class PegwatchTest extends TestCase
         Mail::fake();
         $runId = self::seedRegister();
         $user = User::factory()->create();
-        $this->actingAs($user)->post('/watch-areas', [
+        $this->actingAs($user);
+        Livewire::test('pages::watch-areas')->set([
             'name' => 'x', 'latitude' => -30.8, 'longitude' => 121.5, 'radius_km' => 5,
             'event_types' => ['application' => 'death'],
-        ])->assertSessionHasErrors('event_types');
+        ])->call('save')->assertHasErrors('event_types');
 
         // A row stored as an object (keys are not elements) still matches nothing.
         DB::insert("insert into watch_areas (user_id, name, latitude, longitude, radius_km, event_types, created_at, updated_at)
@@ -176,14 +174,13 @@ class PegwatchTest extends TestCase
                     jsonb_build_object('release_id', 'R1', 'release_at', timestamptz '2026-12-01 08:30+08'), '2026-12-01 08:30', ?::geometry)",
             [$runId, self::square(121.50, -30.80)]);
 
-        $this->get('/activity?type=release_scheduled')->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('events.0.summary', 'R1 at 1 Dec 2026 08:30 AWST'));
+        $this->get('/activity?type=release_scheduled')->assertOk()->assertSee('R1 at 1 Dec 2026 08:30 AWST');
     }
 
     public function test_malformed_query_input_is_ignored_not_a_server_error(): void
     {
         self::seedRegister();
-        foreach (['/activity?type[]=x', '/activity?page=99999999999999999999', '/search?q[]=ab', '/search?q=%FF%FE'] as $url) {
+        foreach (['/activity?type[]=x', '/activity?type=nope', '/activity?page=99999999999999999999', '/activity?page=abc'] as $url) {
             $this->get($url)->assertOk();
         }
         $this->get('/tiles/tenements/99999999999999999999/0/0.mvt')->assertNotFound();
@@ -193,8 +190,8 @@ class PegwatchTest extends TestCase
     {
         self::seedRegister();
         DB::update("update tenements set type = null, status = null where tenid = 'P  1500002'");
-        $this->get('/holders/smith-john')->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('tenements.0.type', null));
+        $this->get('/holders/smith-john')->assertOk()->assertSee('P 15/2');
+        $this->get('/tenements/e-15-1')->assertOk()->assertSee('unknown type');
     }
 
     public function test_hook_without_a_run_id_alerts_on_every_recent_run(): void

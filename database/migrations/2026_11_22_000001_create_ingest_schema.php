@@ -24,6 +24,10 @@ return new class extends Migration
             $$;
             create index if not exists tenements_slug_idx on tenements (pw_slug(fmt_tenid));
             create index if not exists dead_tenements_slug_idx on dead_tenements (pw_slug(fmt_tenid));
+            create or replace function pw_slugs(t text[]) returns text[] language sql immutable as $$
+              select coalesce(array_agg(pw_slug(x)), '{}') from unnest(t) x
+            $$;
+            create index if not exists dead_tenements_holder_slugs_idx on dead_tenements using gin (pw_slugs(holders));
             create index if not exists tenements_holders_idx on tenements using gin (holders);
             create index if not exists tenement_events_tenid_idx on tenement_events (tenid);
         SQL);

@@ -8,7 +8,9 @@ The repo has two parts:
 
 - `ingest/`: a Python job, run nightly by GitHub Actions, that pulls the public
   SLIP layers into PostGIS and records every change as a `tenement_events` row.
-- The Laravel app (repo root): Laravel 12 + Inertia + React, MapLibre, PostGIS.
+- The Laravel app (repo root): Laravel 13, Livewire 4 and Flux (Livewire starter kit), MapLibre, PostGIS.
+  Pages are single-file Livewire components in `resources/views/pages/`; the map is an Alpine
+  component (`resources/js/map.js`) that loads MapLibre only on pages with a map.
   Public map, tenement and holder pages, an activity feed, and free watch-area
   alerts. It reads the ingest's tables and owns only users and watch areas.
 
@@ -19,7 +21,7 @@ createdb pegwatch && psql pegwatch -c 'create extension postgis'
 pip install -e "ingest[test]"
 python -m pegwatch_ingest --dsn postgresql:///pegwatch   # ~1 minute, first run is the baseline
 
-composer install && npm install
+composer install && npm install                     # Flux Pro needs auth.json, see below
 cp .env.example .env && php artisan key:generate   # set DB_USERNAME / DB_PASSWORD
 php artisan migrate
 composer run dev                                     # http://localhost:8000
@@ -47,7 +49,8 @@ has one watch area (a circle up to 50 km) and the death and release alerts.
 1. In Laravel Cloud, choose **+ New application**, then **Connect to GitHub**,
    pick `cpdis/pegwatch`, name it, pick the region nearest Perth (Sydney if the
    Region list offers it) and **Create Application**.
-2. In the environment's settings, set the branch to `main` and PHP 8.4.
+2. In the environment's settings, set the branch to `main` and PHP 8.4. If Flux Pro is installed,
+   add a `COMPOSER_AUTH` environment variable (see Flux Pro below) so the build can install it.
    - Build command: `composer install --no-dev && npm ci --audit false && npm run build && php artisan optimize`
    - Deploy command: `php artisan migrate --force`
 3. On the environment canvas, **Add database**, then create a **Laravel Serverless
@@ -108,3 +111,14 @@ Ingest tests need a scratch PostGIS database: `TEST_DATABASE_URL=postgresql:///p
 
 Data © State of Western Australia (Department of Mines, Petroleum and
 Exploration), CC BY 4.0, changes made.
+
+## Flux Pro
+
+Flux Pro components come from a private Composer repository (`composer.fluxui.dev`), so every
+install needs the licence: the username is the email on the Flux account and the password is the
+"Pegwatch" licence key.
+
+- Locally: `composer config http-basic.composer.fluxui.dev EMAIL KEY` writes `auth.json`, which is
+  gitignored.
+- GitHub Actions and Laravel Cloud: a secret or environment variable named `COMPOSER_AUTH` holding
+  `{"http-basic":{"composer.fluxui.dev":{"username":"EMAIL","password":"KEY"}}}`.
