@@ -27,9 +27,14 @@
 
             <flux:spacer />
 
-            <div class="w-full max-w-xs max-sm:hidden">
-                <livewire:search />
-            </div>
+            <flux:modal.trigger name="search" shortcut="cmd.k" class="max-sm:hidden">
+                <flux:input as="button" size="sm" class="w-full max-w-xs" icon="magnifying-glass" kbd="⌘K" :aria-label="__('Search tenements and holders')">
+                    {{ __('Tenement or holder') }}
+                </flux:input>
+            </flux:modal.trigger>
+            <flux:modal.trigger name="search" shortcut="ctrl.k" class="sm:hidden">
+                <flux:button variant="ghost" size="sm" icon="magnifying-glass" :aria-label="__('Search tenements and holders')" />
+            </flux:modal.trigger>
 
             @auth
                 <flux:dropdown position="bottom" align="end" class="ms-3">
@@ -62,7 +67,6 @@
                 <x-app-logo :sidebar="true" href="{{ route('home') }}" wire:navigate />
                 <flux:sidebar.collapse />
             </flux:sidebar.header>
-            <div class="px-2"><livewire:search /></div>
             <flux:sidebar.nav>
                 <flux:sidebar.item icon="map" :href="route('home')" :current="request()->routeIs('home')" wire:navigate>{{ __('Map') }}</flux:sidebar.item>
                 <flux:sidebar.item icon="bolt" :href="route('activity')" :current="request()->routeIs('activity')" wire:navigate>{{ __('Activity') }}</flux:sidebar.item>
@@ -71,6 +75,8 @@
                 @endauth
             </flux:sidebar.nav>
         </flux:sidebar>
+
+        <livewire:search />
 
         <div @class(['flex flex-1 flex-col' => $fullBleed, 'flex-1' => ! $fullBleed])>
             {{ $slot }}
