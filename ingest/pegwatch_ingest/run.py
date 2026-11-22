@@ -33,7 +33,10 @@ def fetch_layer(conn, client: SlipClient, run_id: int, layer: Layer, where: str)
     expected = client.count(layer, where)
     for attempt in (1, 2):
         db.create_staging(conn, layer)
-        fetched = db.load_features(conn, layer, client.features(layer, where))
+        db.load_features(conn, layer, client.features(layer, where))
+        # Count distinct object ids, so a page served twice cannot hide a missing one.
+        fetched = db.scalar(conn, f"select count(distinct oid) from stg_{layer.key}")
+        conn.commit()
         if fetched == expected:
             break
         log.warning("%s: expected %d rows, got %d (attempt %d)", layer.code, expected, fetched, attempt)
@@ -78,6 +81,14 @@ def run(dsn: str, dead_days: int | None, full_dead: bool, skip_fetch: bool,
         if existing and fetched_live < min_row_ratio * existing:
             raise IngestAborted(
                 f"live layer returned {fetched_live} rows against {existing} last run; refusing to diff")
+        # The pending layers drive release and amalgamation events, so an empty or
+        # truncated fetch would read as every release happening at once.
+        for table in ("release_pending", "amalgamation_pending"):
+            had = db.scalar(conn, f"select count(*) from {table}")
+            got = db.scalar(conn, f"select count(*) from stg_{table}")
+            if (had >= 20 and got < 0.5 * had) or (had > 0 and got == 0):
+                raise IngestAborted(
+                    f"{table} returned {got} rows against {had} last run; refusing to diff")
 
         extract = db.max_extract(conn, TENEMENTS)
         stale = prev_extract is not None and extract == prev_extract

@@ -8,13 +8,17 @@ create or replace function pw_blocks_ground(type_code text) returns boolean
 language sql immutable as $$ select type_code not in ('L', 'G') $$;
 
 create or replace function pw_sorted(a text[]) returns text[]
-language sql immutable as $$ select coalesce(array_agg(x order by x), '{}') from unnest(a) x $$;
+language sql immutable as $$ select coalesce(array_agg(distinct x order by x), '{}') from unnest(a) x $$;
 
--- 1. New applications (and tenements that appear already live, e.g. restorations)
+-- 1. New applications, tenements that appear already live (e.g. restorations), and
+-- tenements we saw die that are back (a restoration, or a gap in the layer).
 insert into tenement_events (run_id, event_type, tenid, fmt_tenid, tenement_type, holders,
                              extract_at, occurred_at, details, geom)
 select :run_id,
-       case when c.status = 'PENDING' then 'application' else 'appeared' end,
+       case when exists (select 1 from tenement_events e where e.tenid = c.tenid and e.event_type = 'death')
+              then 'reappeared'
+            when c.status = 'PENDING' then 'application'
+            else 'appeared' end,
        c.tenid, c.fmt_tenid, c.type, c.holders, c.extract_at, c.applied_at,
        jsonb_build_object('status', c.status, 'area_ha', round(c.area_ha::numeric, 2),
                           'legal_area', c.legal_area, 'area_unit', c.area_unit,
@@ -22,6 +26,13 @@ select :run_id,
        c.geom
 from tenements c
 where not exists (select 1 from tenements_prev p where p.tenid = c.tenid);
+
+-- A reappearance means an earlier death did not stick: mark it so it is not counted.
+update tenement_events e
+set details = e.details || jsonb_build_object('reversed_by_run', :run_id)
+from tenement_events r
+where r.run_id = :run_id and r.event_type = 'reappeared' and r.tenid = e.tenid
+  and e.event_type = 'death' and not (e.details ? 'reversed_by_run');
 
 -- 2. Deaths: in last snapshot, gone from this one.
 with gone as (
@@ -35,11 +46,19 @@ classified as (
          -- over at least 90% of the dead one (e.g. P -> M, E -> M).
          (select c.tenid from tenements c
            where c.geom && g.geom
+             and c.type_code is distinct from g.type_code
              and not exists (select 1 from tenements_prev p2 where p2.tenid = c.tenid)
              and c.holders && g.holders
              and ST_Area(ST_Intersection(c.geom, g.geom)) >= 0.9 * nullif(ST_Area(g.geom), 0)
            order by ST_Area(ST_Intersection(c.geom, g.geom)) desc limit 1) as converted_to,
-         (select a.amalgid from amalgamation_pending_prev a where a.tenid = g.tenid limit 1) as amalgamation,
+         -- Amalgamated: layer 20 keys a pending amalgamation by the licence that
+         -- receives the ground; its parcels are the ground coming in. So a dead
+         -- tenement was amalgamated when most of it lay under another licence's parcels.
+         (select a.amalgid || ' into ' || coalesce(a.fmt_tenid, a.tenid)
+            from amalgamation_pending_prev a
+           where a.tenid <> g.tenid and a.geom && g.geom
+             and ST_Area(ST_Intersection(a.geom, g.geom)) >= 0.5 * nullif(ST_Area(g.geom), 0)
+           order by ST_Area(ST_Intersection(a.geom, g.geom)) desc limit 1) as amalgamation,
          -- Share of the area still under any live or pending tenement / a blocking one.
          (select ST_Union(c.geom) from tenements c
            where c.geom && g.geom and ST_Intersects(c.geom, g.geom)) as cover_any,
@@ -48,8 +67,12 @@ classified as (
              and pw_blocks_ground(c.type_code)) as cover_blocking
   from gone g
   left join lateral (
+    -- Only a death recorded around now: an old row is an earlier death of a
+    -- tenement that was later restored.
     select death_reason, ended_at from dead_tenements d
-    where d.tenid = g.tenid order by ended_at desc limit 1
+    where d.tenid = g.tenid
+      and d.ended_at >= (g.extract_at at time zone 'Australia/Perth') - interval '30 days'
+    order by ended_at desc limit 1
   ) d on true
 ),
 measured as (
@@ -99,7 +122,9 @@ select :run_id, 'holder_change', c.tenid, c.fmt_tenid, c.type, c.holders, c.extr
          'removed', to_jsonb(array(select unnest(p.holders) except select unnest(c.holders)))),
        c.geom
 from tenements c join tenements_prev p using (tenid)
-where pw_sorted(p.holders) <> pw_sorted(c.holders);
+where pw_sorted(p.holders) <> pw_sorted(c.holders)
+  and (exists (select unnest(c.holders) except select unnest(p.holders))
+       or exists (select unnest(p.holders) except select unnest(c.holders)));
 
 -- 5. Geometry changes: partial surrender (shrink) or added ground (grow).
 -- Ignore slivers under 0.5 ha or 0.1% of the tenement, which are re-digitising noise.
@@ -143,6 +168,20 @@ select :run_id, 'release_scheduled', r.tenid, r.fmt_tenid, r.ten_type,
 from release_pending r
 where not exists (select 1 from release_pending_prev p where p.tenid = r.tenid and p.rlesid = r.rlesid);
 
+-- A scheduled release moved to another time
+insert into tenement_events (run_id, event_type, tenid, fmt_tenid, tenement_type, holders,
+                             extract_at, occurred_at, details, geom)
+select :run_id, 'release_scheduled', r.tenid, r.fmt_tenid, r.ten_type,
+       (select holders from tenements t where t.tenid = r.tenid), null,
+       (r.release_at at time zone 'Australia/Perth'),
+       jsonb_build_object('release_id', r.rlesid, 'release_at', r.release_at,
+                          'rescheduled_from', p.release_at,
+                          'area_ha', round((ST_Area(r.geom::geography) / 10000)::numeric, 2)),
+       r.geom
+from release_pending r
+join release_pending_prev p on p.tenid = r.tenid and p.rlesid = r.rlesid
+where p.release_at is distinct from r.release_at;
+
 insert into tenement_events (run_id, event_type, tenid, fmt_tenid, tenement_type, holders,
                              extract_at, occurred_at, details, geom)
 select :run_id,
@@ -163,4 +202,4 @@ from dead_tenements d
 where e.event_type = 'death'
   and e.details->>'death_reason' is null
   and d.tenid = e.tenid
-  and d.ended_at >= e.created_at - interval '60 days';
+  and d.ended_at >= (e.extract_at at time zone 'Australia/Perth') - interval '30 days';

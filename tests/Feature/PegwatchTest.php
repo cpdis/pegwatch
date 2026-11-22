@@ -196,4 +196,21 @@ class PegwatchTest extends TestCase
         $this->get('/holders/smith-john')->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('tenements.0.type', null));
     }
+
+    public function test_hook_without_a_run_id_alerts_on_every_recent_run(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create();
+        $user->watchAreas()->create(['name' => 'Kal east', 'latitude' => -30.795, 'longitude' => 121.525, 'radius_km' => 2, 'event_types' => ['death']]);
+        DB::update("update watch_areas set created_at = now() - interval '2 days'");
+        $first = self::seedRegister();   // has a death in the area; its hook call was missed
+        DB::table('ingest_runs')->insertGetId(['status' => 'ok', 'finished_at' => now()]);  // next night: nothing
+        DB::insert("insert into tenement_events (run_id, event_type, tenid, fmt_tenid, details, created_at, geom)
+            values (?, 'death', 'P  1500077', 'P 15/77', '{}', now() - interval '3 days', ?::geometry)",
+            [$first, self::square(121.52, -30.80)]);  // older than the watch area: not alerted
+        config(['services.ingest.token' => 'secret']);
+
+        $this->withToken('secret')->postJson('/hooks/ingest-complete')->assertOk()->assertJsonPath('emails', 1);
+        Mail::assertSent(WatchAreaDigest::class, fn ($m) => array_column($m->events, 'fmt_tenid') === ['P 15/9']);
+    }
 }

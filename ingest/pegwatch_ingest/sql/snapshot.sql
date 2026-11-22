@@ -48,27 +48,40 @@ from (
 -- A tenid split into several rows would be a schema surprise; keep the largest.
 order by tenid, area_ha desc nulls last;
 
--- 2. Dead tenements: upsert the recent window (or the full layer on --full-dead)
+-- 2. Dead tenements: upsert the recent window (or the full layer on --full-dead).
+-- The layer has one row per holder, so fold the holders of each death together.
 insert into dead_tenements (tenid, ended_at, fmt_tenid, type, death_reason, holder_name,
-                            holder_is_company, started_at, granted_at, extract_at, first_seen_run, geom)
-select distinct on (rtrim(props->>'tenid'), pw_local_ts(props->'enddate', props->'endtime'))
-       rtrim(props->>'tenid'),
-       pw_local_ts(props->'enddate', props->'endtime'),
-       pw_text(props->'fmt_tenid'),
-       pw_text(props->'type'),
-       pw_text(props->'deathreason'),
-       pw_text(props->'holdername'),
-       pw_is_company(pw_text(props->'holdername')),
-       pw_local_ts(props->'startdate', props->'starttime'),
-       pw_local_ts(props->'grantdate', props->'granttime'),
-       pw_ts_local(props->'extract_date'),
-       :run_id,
-       pw_geom(gj)
-from stg_dead
-where pw_text(props->'tenid') is not null and pw_date(props->'enddate') is not null
+                            holder_is_company, holders, holders_are_company, started_at, granted_at,
+                            extract_at, first_seen_run, geom)
+select tenid, ended_at, fmt_tenid, type, death_reason, holders[1], pw_is_company(holders[1]),
+       holders, (select coalesce(array_agg(pw_is_company(n) order by o), '{}')
+                   from unnest(holders) with ordinality u(n, o)),
+       started_at, granted_at, extract_at, :run_id, geom
+from (
+  select rtrim(props->>'tenid') as tenid,
+         pw_local_ts(props->'enddate', props->'endtime') as ended_at,
+         min(pw_text(props->'fmt_tenid')) as fmt_tenid,
+         min(pw_text(props->'type')) as type,
+         min(pw_text(props->'deathreason')) as death_reason,
+         coalesce(array_agg(distinct pw_text(props->'holdername'))
+                    filter (where pw_text(props->'holdername') is not null), '{}') as holders,
+         min(pw_local_ts(props->'startdate', props->'starttime')) as started_at,
+         min(pw_local_ts(props->'grantdate', props->'granttime')) as granted_at,
+         max(pw_ts_local(props->'extract_date')) as extract_at,
+         (array_agg(pw_geom(gj) order by oid) filter (where gj is not null))[1] as geom
+  from stg_dead
+  where pw_text(props->'tenid') is not null and pw_date(props->'enddate') is not null
+  group by 1, 2
+) d
 on conflict (tenid, ended_at) do update
   set death_reason = excluded.death_reason,
       extract_at = excluded.extract_at,
+      holders = (select coalesce(array_agg(distinct h), '{}')
+                   from unnest(dead_tenements.holders || excluded.holders) h),
+      holders_are_company = (select coalesce(array_agg(pw_is_company(h) order by h), '{}')
+                               from (select distinct unnest(dead_tenements.holders || excluded.holders) h) x),
+      holder_name = coalesce(dead_tenements.holder_name, excluded.holder_name),
+      holder_is_company = coalesce(dead_tenements.holder_is_company, excluded.holder_is_company),
       geom = coalesce(excluded.geom, dead_tenements.geom);
 
 -- 3. Release pending

@@ -14,17 +14,30 @@ use Illuminate\Support\Facades\Mail;
  */
 class AlertMatcher
 {
-    /** @return array{matched: int, emails: int} */
-    public function run(int $runId): array
+    /**
+     * Match one run's events, or with no run id every successful run of the last
+     * week, so a run whose hook call was missed is still alerted on later.
+     *
+     * @return array{matched: int, emails: int}
+     */
+    public function run(?int $runId = null): array
     {
+        $runs = $runId !== null ? [$runId] : DB::table('ingest_runs')->where('status', 'ok')
+            ->where('started_at', '>=', now()->subDays(7))->pluck('id')->all();
+        if (! $runs) {
+            return ['matched' => 0, 'emails' => 0];
+        }
+
         $matched = DB::affectingStatement(
             'insert into alert_deliveries (watch_area_id, tenement_event_id, created_at, updated_at)
              select w.id, e.id, now(), now()
              from watch_areas w
              join tenement_events e on e.geom && w.area and ST_Intersects(e.geom, w.area)
-             where e.run_id = ? and w.event_types @> jsonb_build_array(e.event_type)
+             where e.run_id = any(?::bigint[]) and w.event_types @> jsonb_build_array(e.event_type)
+               and e.created_at >= w.created_at
+               and not jsonb_exists(e.details, \'reversed_by_run\')
              on conflict (watch_area_id, tenement_event_id) do nothing',
-            [$runId]
+            ['{'.implode(',', array_map('intval', $runs)).'}']
         );
 
         $emails = 0;

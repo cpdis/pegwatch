@@ -10,9 +10,10 @@ language sql immutable as $$
 $$;
 
 -- Local wall-clock timestamp (Australia/Perth) from a date + time string.
+-- 31 Dec 2999 is SLIP's placeholder for "no date" (pending grant and expiry): null.
 create or replace function pw_local_ts(ms jsonb, hhmmss jsonb) returns timestamp
 language sql immutable as $$
-  select case when pw_date(ms) is null then null
+  select case when pw_date(ms) is null or pw_date(ms) >= date '2999-01-01' then null
               else pw_date(ms) + coalesce(nullif(trim(hhmmss #>> '{}'), '')::time, time '00:00') end
 $$;
 
@@ -99,6 +100,9 @@ create table if not exists dead_tenements (
   geom         geometry(MultiPolygon, 4326),
   primary key (tenid, ended_at)
 );
+-- The DEAD layer has one row per holder; all holders of a death are kept here.
+alter table dead_tenements add column if not exists holders text[] not null default '{}';
+alter table dead_tenements add column if not exists holders_are_company boolean[] not null default '{}';
 create index if not exists dead_tenements_geom_idx on dead_tenements using gist (geom);
 create index if not exists dead_tenements_tenid_idx on dead_tenements (tenid);
 

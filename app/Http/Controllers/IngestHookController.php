@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Alerts\AlertMatcher;
-use App\Support\Register;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,8 +14,7 @@ class IngestHookController extends Controller
         $token = (string) config('services.ingest.token');
         abort_if($token === '' || ! hash_equals($token, (string) $request->bearerToken()), 401);
 
-        $runId = (int) ($request->input('run_id') ?: Register::latestRun()?->id);
-        abort_if($runId === 0, 422, 'No ingest run');
+        $runId = $request->integer('run_id') ?: null;
 
         return response()->json(['run_id' => $runId] + $matcher->run($runId));
     }

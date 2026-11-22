@@ -78,7 +78,7 @@ jobs:
           if [ -z "$run_id" ]; then echo "No previous state: this run is the baseline."; exit 0; fi
           gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name pegwatch-state --dir state
           psql "$DATABASE_URL" -c "create extension if not exists postgis"
-          /usr/lib/postgresql/16/bin/pg_restore --no-owner --dbname "$DATABASE_URL" state/state.dump
+          /usr/lib/postgresql/16/bin/pg_restore --no-owner --exit-on-error --dbname "$DATABASE_URL" state/state.dump
           echo "Restored state from run $run_id"
 
       - name: Ingest
@@ -97,7 +97,10 @@ jobs:
         if: ${{ env.USE_ARTIFACT == 'true' }}
         run: |
           mkdir -p state
+          # The postgis image also creates topology and tiger schemas; they are
+          # recreated on restore, so leave them out of the dump.
           /usr/lib/postgresql/16/bin/pg_dump -Fc --no-owner --exclude-table 'stg_*' \
+            --exclude-schema tiger --exclude-schema tiger_data --exclude-schema topology \
             --exclude-table-data 'tenements_prev' --exclude-table-data '*_pending_prev' \
             --exclude-table-data 'land_restrictions' \
             "$DATABASE_URL" -f state/state.dump

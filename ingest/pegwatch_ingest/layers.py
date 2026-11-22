@@ -44,8 +44,8 @@ DEAD = Layer(
     where="enddate >= date '{since}'",
     fields=(
         "tenid", "fmt_tenid", "type", "survstatus", "tenstatus", "deathreason",
-        "holdercnt", "holdername", "startdate", "enddate", "grantdate",
-        "extract_date",
+        "holdercnt", "holdername", "startdate", "starttime", "enddate", "endtime",
+        "grantdate", "granttime", "extract_date",
     ),
 )
 
