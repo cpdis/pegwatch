@@ -59,6 +59,9 @@ new class extends Component {
             </dd>
         </dl>
 
+        {{-- f-accounts: the locked Pro export (W4); c-tenement owns the rest of this page. --}}
+        <flux:button size="sm" icon="lock-closed" class="mt-4" :href="url('/pro?ref=export')" wire:navigate data-test="export-lock">{{ __('Export GPX / KML') }}</flux:button>
+
         @if (count($data['releases']))
             <flux:callout variant="danger" icon="exclamation-triangle" class="mt-4" :heading="__('Part of this licence is due for compulsory surrender.')">
                 <flux:callout.text>

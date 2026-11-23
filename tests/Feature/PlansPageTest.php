@@ -45,4 +45,17 @@ class PlansPageTest extends TestCase
         Livewire::withQueryParams(['ref' => 'export'])->test('pages::pro')->set('email', 'pat@example.com')->call('reserve');
         $this->assertSame('pro-page:export', DB::table('presales')->value('source'));
     }
+
+    public function test_the_tenement_page_and_header_lead_here_and_to_free_alerts(): void
+    {
+        DB::insert(
+            "insert into tenements (tenid, fmt_tenid, type, type_code, status, holders, holder_is_company, area_ha, geom)
+             values ('E  1500001', 'E 15/1', 'EXPLORATION LICENCE', 'E', 'LIVE', '{\"ACME GOLD PTY LTD\"}', '{t}', 100,
+                     'SRID=4326;MULTIPOLYGON(((121.5 -30.8,121.51 -30.8,121.51 -30.79,121.5 -30.79,121.5 -30.8)))'::geometry)"
+        );
+
+        $this->get('/tenements/e-15-1')->assertOk()
+            ->assertSee('Export GPX / KML')->assertSee('/pro?ref=export', false)
+            ->assertSee('href="'.route('watch.start').'"', false)->assertSee('Plans');
+    }
 }

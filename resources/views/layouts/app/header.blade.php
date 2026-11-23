@@ -22,11 +22,11 @@
                     {{ __('Weekly digest') }}
                 </flux:navbar.item>
                 <flux:navbar.item icon="sparkles" :href="route('pro')" :current="request()->routeIs('pro')" wire:navigate>
-                    {{ __('Pricing') }}
+                    {{ __('Plans') }}
                 </flux:navbar.item>
                 @auth
                     <flux:navbar.item icon="bell-alert" :href="route('watch-areas.index')" :current="request()->routeIs('watch-areas.*')" wire:navigate>
-                        {{ __('My watch area') }}
+                        {{ __('My watches') }}
                     </flux:navbar.item>
                 @endauth
             </flux:navbar>
@@ -51,7 +51,7 @@
                             <flux:text class="truncate">{{ auth()->user()->email }}</flux:text>
                         </div>
                         <flux:menu.separator />
-                        <flux:menu.item :href="route('watch-areas.index')" icon="bell-alert" wire:navigate>{{ __('My watch area') }}</flux:menu.item>
+                        <flux:menu.item :href="route('watch-areas.index')" icon="bell-alert" wire:navigate>{{ __('My watches') }}</flux:menu.item>
                         <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>{{ __('Settings') }}</flux:menu.item>
                         <flux:menu.separator />
                         <form method="POST" action="{{ route('logout') }}" class="w-full">
@@ -64,7 +64,7 @@
                 </flux:dropdown>
             @else
                 <flux:button variant="ghost" size="sm" :href="route('login')" class="ms-3 max-sm:hidden" wire:navigate>{{ __('Log in') }}</flux:button>
-                <flux:button variant="primary" size="sm" :href="route('register')" class="ms-2 shrink-0" wire:navigate>{{ __('Free alerts') }}</flux:button>
+                <flux:button variant="primary" size="sm" :href="route('watch.start')" class="ms-2 shrink-0" wire:navigate>{{ __('Free alerts') }}</flux:button>
             @endauth
         </flux:header>
 
@@ -77,12 +77,12 @@
                 <flux:sidebar.item icon="map" :href="route('home')" :current="request()->routeIs('home')" wire:navigate>{{ __('Map') }}</flux:sidebar.item>
                 <flux:sidebar.item icon="bolt" :href="route('activity')" :current="request()->routeIs('activity')" wire:navigate>{{ __('Activity') }}</flux:sidebar.item>
                 <flux:sidebar.item icon="envelope" :href="route('digest')" :current="request()->routeIs('digest*')" wire:navigate>{{ __('Weekly digest') }}</flux:sidebar.item>
-                <flux:sidebar.item icon="sparkles" :href="route('pro')" :current="request()->routeIs('pro')" wire:navigate>{{ __('Pricing') }}</flux:sidebar.item>
+                <flux:sidebar.item icon="sparkles" :href="route('pro')" :current="request()->routeIs('pro')" wire:navigate>{{ __('Plans') }}</flux:sidebar.item>
                 @auth
-                    <flux:sidebar.item icon="bell-alert" :href="route('watch-areas.index')" wire:navigate>{{ __('My watch area') }}</flux:sidebar.item>
+                    <flux:sidebar.item icon="bell-alert" :href="route('watch-areas.index')" wire:navigate>{{ __('My watches') }}</flux:sidebar.item>
                 @else
                     <flux:sidebar.item icon="arrow-right-end-on-rectangle" :href="route('login')" wire:navigate>{{ __('Log in') }}</flux:sidebar.item>
-                    <flux:sidebar.item icon="bell-alert" :href="route('register')" wire:navigate>{{ __('Free alerts') }}</flux:sidebar.item>
+                    <flux:sidebar.item icon="bell-alert" :href="route('watch.start')" wire:navigate>{{ __('Free alerts') }}</flux:sidebar.item>
                 @endauth
             </flux:sidebar.nav>
         </flux:sidebar>
