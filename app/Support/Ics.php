@@ -53,20 +53,25 @@ class Ics
     /** Escape text values (RFC 5545, 3.3.11). */
     private static function text(string $v): string
     {
-        return str_replace(["\\", ';', ',', "\r\n", "\n"], ['\\\\', '\;', '\,', '\n', '\n'], $v);
+        return str_replace(['\\', ';', ',', "\r\n", "\n"], ['\\\\', '\;', '\,', '\n', '\n'], $v);
     }
 
-    /** Fold lines longer than 75 octets (RFC 5545, 3.1). */
+    /**
+     * Fold lines longer than 75 octets (RFC 5545, 3.1). Continuation lines start
+     * with a space, which counts toward their 75, and never split a UTF-8 character.
+     */
     private static function fold(string $line): string
     {
         $out = '';
-        while (strlen($line) > 75) {
-            $cut = 75;
+        $limit = 75;
+        while (strlen($line) > $limit) {
+            $cut = $limit;
             while ($cut > 0 && (ord($line[$cut]) & 0xC0) === 0x80) {
                 $cut--;
             }
             $out .= substr($line, 0, $cut)."\r\n ";
             $line = substr($line, $cut);
+            $limit = 74;
         }
 
         return $out.$line;
