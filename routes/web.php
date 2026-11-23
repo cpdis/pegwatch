@@ -5,8 +5,10 @@ use App\Http\Controllers\DigestUnsubscribeController;
 use App\Http\Controllers\IngestHookController;
 use App\Http\Controllers\OgImageController;
 use App\Http\Controllers\ReleaseIcsController;
+use App\Http\Controllers\LoginLinkController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\TileController;
+use App\Http\Controllers\WatchLinkController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
 
@@ -52,6 +54,25 @@ Route::get('og/areas/{watchArea}.png', [OgImageController::class, 'area'])
 // e-activity
 // Public and cookie-free, like the tiles, so a CDN can cache it.
 Route::get('activity.rss', ActivityRssController::class)->withoutMiddleware('web')->name('activity.rss');
+
+// f-accounts: email-first watching, sign-in by emailed link, alert unsubscribe.
+// Every emailed link opens a page with one button; only the POST acts.
+Route::livewire('watch', 'pages::watch')->name('watch.start');
+Route::get('watch/confirm/{watchArea}', [WatchLinkController::class, 'show'])->whereNumber('watchArea')->name('watch.confirm');
+Route::post('watch/confirm/{watchArea}', [WatchLinkController::class, 'confirm'])->whereNumber('watchArea')->name('watch.confirm.store');
+Route::get('watch-areas/{watchArea}/stop', [WatchLinkController::class, 'showStop'])->whereNumber('watchArea')->name('watch-areas.stop');
+Route::post('watch-areas/{watchArea}/stop', [WatchLinkController::class, 'stop'])->whereNumber('watchArea')
+    ->withoutMiddleware([PreventRequestForgery::class])->name('watch-areas.stop.one-click');
+Route::middleware('guest')->group(function () {
+    // Sign-up is email only, so it replaces Fortify's password registration.
+    Route::view('register', 'pages::auth.register')->name('register');
+    Route::post('login/link', [LoginLinkController::class, 'send'])->name('login.link.send');
+});
+Route::get('login/link/{token}', [LoginLinkController::class, 'show'])->name('login.link');
+Route::post('login/link/{token}', [LoginLinkController::class, 'store'])->name('login.link.store');
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('watch-areas/{watchArea}/preview', [WatchLinkController::class, 'preview'])->whereNumber('watchArea')->name('watch-areas.preview');
+});
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::redirect('dashboard', '/watch-areas')->name('dashboard');

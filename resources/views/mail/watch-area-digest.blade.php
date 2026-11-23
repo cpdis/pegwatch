@@ -1,26 +1,41 @@
 <x-mail::message>
+@if ($preview)
+*Preview: what this email would have said about the last 30 days. Real emails come after a night with changes.*
+
+@endif
 # {{ $area->name }}
 
-Changes on the WA tenement register within {{ $area->radius_km }} km of your watch area,
-from the department's extract of {{ $run?->tenements_extract ? \Illuminate\Support\Carbon::parse($run->tenements_extract)->timezone('Australia/Perth')->format('j M Y, g:ia') : 'the latest extract' }} AWST.
+{{ $describe }}. {{ $extract ? __('Changes on the WA tenement register in the department\'s extract of :time AWST.', ['time' => $extract]) : __('Changes on the WA tenement register.') }}
 
-@foreach ($events as $e)
-**{{ $e['label'] }}: [{{ $e['fmt_tenid'] }}]({{ url('/tenements/'.$e['slug']) }})**
-{{ $e['tenement_type'] }}@if ($e['holders']) · {{ collect($e['holders'])->pluck('name')->join(', ') }}@endif
+@if (\Illuminate\Support\Facades\Route::has('og.area'))
+![{{ __('Map of :name', ['name' => $area->name]) }}]({{ \Illuminate\Support\Facades\URL::signedRoute('og.area', ['watchArea' => $area->id]) }})
 
-{{ $e['summary'] }}
+@endif
+@forelse ($groups as $group => $items)
+## {{ \App\Mail\WatchAreaDigest::GROUP_HEADINGS[$group] }}
+
+@foreach ($items as $item)
+**[{{ $item['id'] }}]({{ $item['url'] }})**@if ($item['meta']) · {{ $item['meta'] }}@endif<br>
+{{ $item['line'] }}@if ($item['holders'])<br>
+Holders: {{ $item['holders'] }}@endif
+
 
 @endforeach
+@empty
+Nothing in this watch changed.
 
-<x-mail::button :url="url('/')">
-Open the map
+@endforelse
+<x-mail::button :url="$mapUrl">
+{{ $area->kind === 'holder' ? __('Open the holder') : __('Open the map') }}
 </x-mail::button>
 
-You get this email because of your watch area "{{ $area->name }}". To stop these emails,
-[delete the watch area]({{ route('watch-areas.index') }}).
+Pegwatch is a screening aid, not advice. Confirm every tenement in [TENGRAPH]({{ \App\Support\Format::TENGRAPH_URL }}) and with the Mining Registrar before you act.
 
-This is a screening aid, not advice that ground can be applied for. Confirm every tenement in
-[TENGRAPH]({{ \App\Support\Format::TENGRAPH_URL }}) and with the Mining Registrar before you act.
+<x-mail::subcopy>
+You get this because you watch "{{ $area->name }}".
+
+[Stop alerts for this area]({{ $stopUrl }}) · [Manage your watches]({{ route('watch-areas.index') }})
 
 Data © State of Western Australia (Department of Mines, Petroleum and Exploration), CC BY 4.0, changes made.
+</x-mail::subcopy>
 </x-mail::message>

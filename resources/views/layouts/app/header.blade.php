@@ -10,7 +10,7 @@
         ['label' => __('Plans'), 'icon' => 'sparkles', 'route' => 'pro', 'current' => 'pro'],
     ];
     if (auth()->check()) {
-        $nav[] = ['label' => __('My watch area'), 'icon' => 'bell-alert', 'route' => 'watch-areas.index', 'current' => 'watch-areas.*'];
+        $nav[] = ['label' => __('My watches'), 'icon' => 'bell-alert', 'route' => 'watch-areas.index', 'current' => 'watch-areas.*'];
     }
 @endphp
 <!DOCTYPE html>
@@ -62,7 +62,7 @@
                             <flux:text class="truncate">{{ auth()->user()->email }}</flux:text>
                         </div>
                         <flux:menu.separator />
-                        <flux:menu.item :href="route('watch-areas.index')" icon="bell-alert" wire:navigate>{{ __('My watch area') }}</flux:menu.item>
+                        <flux:menu.item :href="route('watch-areas.index')" icon="bell-alert" wire:navigate>{{ __('My watches') }}</flux:menu.item>
                         <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>{{ __('Settings') }}</flux:menu.item>
                         <flux:menu.separator />
                         <form method="POST" action="{{ route('logout') }}" class="w-full">

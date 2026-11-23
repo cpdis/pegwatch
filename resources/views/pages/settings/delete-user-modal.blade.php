@@ -15,8 +15,14 @@ new class extends Component {
      */
     public function deleteUser(Logout $logout): void
     {
+        $user = Auth::user();
         $this->validate([
-            'password' => $this->currentPasswordRules(),
+            // Accounts without a password confirm by typing their email address.
+            'password' => $user->hasPassword() ? $this->currentPasswordRules() : ['required', 'string', function ($attribute, $value, $fail) use ($user) {
+                if (strtolower(trim($value)) !== strtolower($user->email)) {
+                    $fail(__('Type :email to confirm.', ['email' => $user->email]));
+                }
+            }],
         ]);
 
         tap(Auth::user(), $logout(...))->delete();
@@ -31,11 +37,19 @@ new class extends Component {
             <flux:heading size="lg">{{ __('Are you sure you want to delete your account?') }}</flux:heading>
 
             <flux:subheading>
-                {{ __('Once your account is deleted, all of its resources and data will be permanently deleted. Please enter your password to confirm you would like to permanently delete your account.') }}
+                @if (auth()->user()->hasPassword())
+                    {{ __('This deletes your account, your watches and their alert history. It cannot be undone. Enter your password to confirm.') }}
+                @else
+                    {{ __('This deletes your account, your watches and their alert history. It cannot be undone. Type your email address to confirm.') }}
+                @endif
             </flux:subheading>
         </div>
 
-        <flux:input wire:model="password" :label="__('Password')" type="password" viewable />
+        @if (auth()->user()->hasPassword())
+            <flux:input wire:model="password" :label="__('Password')" type="password" viewable />
+        @else
+            <flux:input wire:model="password" :label="__('Email address')" :placeholder="auth()->user()->email" type="email" autocomplete="off" />
+        @endif
 
         <div class="flex justify-end space-x-2 rtl:space-x-reverse">
             <flux:modal.close>

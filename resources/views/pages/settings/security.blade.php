@@ -24,13 +24,17 @@ new #[Title('Security settings')] class extends Component {
 
     public bool $requiresConfirmation;
 
+    /** False for accounts that sign in by emailed link only. */
+    public bool $hasPassword;
 
     /**
      * Mount the component.
      */
     public function mount(DisableTwoFactorAuthentication $disableTwoFactorAuthentication): void
     {
-        $this->canManageTwoFactor = Features::canManageTwoFactorAuthentication();
+        $this->hasPassword = Auth::user()->hasPassword();
+        // Turning two-factor on or off needs a password to re-confirm with.
+        $this->canManageTwoFactor = Features::canManageTwoFactorAuthentication() && $this->hasPassword;
 
         if ($this->canManageTwoFactor) {
             if (Fortify::confirmsTwoFactorAuthentication() && is_null(auth()->user()->two_factor_confirmed_at)) {
@@ -50,8 +54,8 @@ new #[Title('Security settings')] class extends Component {
     {
         try {
             $validated = $this->validate([
-                'current_password' => $this->currentPasswordRules(),
                 'password' => $this->passwordRules(),
+                ...(Auth::user()->hasPassword() ? ['current_password' => $this->currentPasswordRules()] : []),
             ]);
         } catch (ValidationException $e) {
             $this->reset('current_password', 'password', 'password_confirmation');
@@ -65,7 +69,12 @@ new #[Title('Security settings')] class extends Component {
 
         $this->reset('current_password', 'password', 'password_confirmation');
 
-        Flux::toast(variant: 'success', text: __('Password updated.'));
+        Flux::toast(variant: 'success', text: $this->hasPassword ? __('Password updated.') : __('Password set. You can sign in with it or with an emailed link.'));
+
+        if (! $this->hasPassword) {
+            // Reload so two-factor is offered and the page asks for the password from now on.
+            $this->redirectRoute('security.edit', navigate: true);
+        }
     }
 
 
@@ -94,16 +103,21 @@ new #[Title('Security settings')] class extends Component {
 
     <flux:heading level="2" class="sr-only">{{ __('Security settings') }}</flux:heading>
 
-    <x-pages::settings.layout :heading="__('Update password')" :subheading="__('Ensure your account is using a long, random password to stay secure')">
+    <x-pages::settings.layout
+        :heading="$hasPassword ? __('Update password') : __('Set a password (optional)')"
+        :subheading="$hasPassword ? __('Use a long, random password. You can also sign in with an emailed link.') : __('You sign in with a link we email you. A password lets you sign in without opening your email.')"
+    >
         <form method="POST" wire:submit="updatePassword" class="mt-6 space-y-6">
-            <flux:input
-                wire:model="current_password"
-                :label="__('Current password')"
-                type="password"
-                required
-                autocomplete="current-password"
-                viewable
-            />
+            @if ($hasPassword)
+                <flux:input
+                    wire:model="current_password"
+                    :label="__('Current password')"
+                    type="password"
+                    required
+                    autocomplete="current-password"
+                    viewable
+                />
+            @endif
             <flux:input
                 wire:model="password"
                 :label="__('New password')"
@@ -125,10 +139,17 @@ new #[Title('Security settings')] class extends Component {
 
             <div class="flex items-center gap-4">
                 <flux:button variant="primary" type="submit" data-test="update-password-button">
-                    {{ __('Save') }}
+                    {{ $hasPassword ? __('Save') : __('Set password') }}
                 </flux:button>
             </div>
         </form>
+
+        @if (! $hasPassword && \Laravel\Fortify\Features::canManageTwoFactorAuthentication())
+            <section class="mt-12">
+                <flux:heading>{{ __('Two-factor authentication') }}</flux:heading>
+                <flux:text class="mt-2" variant="subtle">{{ __('Set a password to turn on two-factor authentication.') }}</flux:text>
+            </section>
+        @endif
 
         @if ($canManageTwoFactor)
             <section class="mt-12">

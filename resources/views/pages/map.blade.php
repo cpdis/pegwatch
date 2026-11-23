@@ -167,7 +167,8 @@ new #[Layout('layouts::map'), Title('WA tenement map')] class extends Component 
         </button>
 
         <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:pt-4" x-bind:class="sheet === 'peek' && 'max-sm:overflow-hidden'">
-            {{-- f-accounts: watch-this-area --}}
+            {{-- f-accounts: the email-first watch panel; it fills from the map's draw tool. --}}
+            <div class="mb-5"><livewire:watch-this-area compact /></div>
 
             <flux:heading size="lg" level="1" class="max-sm:hidden">{{ __('Every WA mining tenement') }}</flux:heading>
             <p class="text-sm tabular-nums sm:mt-1" wire:loading.class="opacity-60">

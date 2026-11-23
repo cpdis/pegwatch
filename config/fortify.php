@@ -143,8 +143,8 @@ return [
     |
     */
 
+    // Sign-up is email first (routes/web.php, f-accounts): no password registration.
     'features' => [
-        Features::registration(),
         Features::resetPasswords(),
         Features::emailVerification(),
         Features::twoFactorAuthentication([

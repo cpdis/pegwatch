@@ -36,6 +36,9 @@ new class extends Component {
     #[On('start-two-factor-setup')]
     public function startTwoFactorSetup(): void
     {
+        // Without a password there is nothing to re-confirm with when turning it off (see security page).
+        abort_unless(auth()->user()->hasPassword(), 403);
+
         if (auth()->user()->hasEnabledTwoFactorAuthentication()) {
             $this->dispatch('two-factor-enabled');
 
