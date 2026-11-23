@@ -18,6 +18,12 @@
                 <flux:navbar.item icon="bolt" :href="route('activity')" :current="request()->routeIs('activity')" wire:navigate>
                     {{ __('Activity') }}
                 </flux:navbar.item>
+                <flux:navbar.item icon="envelope" :href="route('digest')" :current="request()->routeIs('digest*')" wire:navigate>
+                    {{ __('Weekly digest') }}
+                </flux:navbar.item>
+                <flux:navbar.item icon="sparkles" :href="route('pro')" :current="request()->routeIs('pro')" wire:navigate>
+                    {{ __('Pricing') }}
+                </flux:navbar.item>
                 @auth
                     <flux:navbar.item icon="bell-alert" :href="route('watch-areas.index')" :current="request()->routeIs('watch-areas.*')" wire:navigate>
                         {{ __('My watch area') }}
@@ -70,6 +76,8 @@
             <flux:sidebar.nav>
                 <flux:sidebar.item icon="map" :href="route('home')" :current="request()->routeIs('home')" wire:navigate>{{ __('Map') }}</flux:sidebar.item>
                 <flux:sidebar.item icon="bolt" :href="route('activity')" :current="request()->routeIs('activity')" wire:navigate>{{ __('Activity') }}</flux:sidebar.item>
+                <flux:sidebar.item icon="envelope" :href="route('digest')" :current="request()->routeIs('digest*')" wire:navigate>{{ __('Weekly digest') }}</flux:sidebar.item>
+                <flux:sidebar.item icon="sparkles" :href="route('pro')" :current="request()->routeIs('pro')" wire:navigate>{{ __('Pricing') }}</flux:sidebar.item>
                 @auth
                     <flux:sidebar.item icon="bell-alert" :href="route('watch-areas.index')" wire:navigate>{{ __('My watch area') }}</flux:sidebar.item>
                 @else

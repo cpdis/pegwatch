@@ -35,6 +35,14 @@ return [
         ],
     ],
 
+    // Prospector pre-sale (plan step 2). Without a secret and a price the
+    // pre-sale page records reservations and takes no payment.
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET', ''),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET', ''),
+        'presale_price' => env('STRIPE_PRESALE_PRICE', ''),
+    ],
+
     'ingest' => [
         'token' => env('PEGWATCH_INGEST_TOKEN', ''),
     ],
