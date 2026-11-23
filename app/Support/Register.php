@@ -473,4 +473,54 @@ class Register
 
         return [min($xs), min($ys), max($xs), max($ys)];
     }
+
+    // g-visual: share previews and OG images.
+
+    /**
+     * One tenement's facts for a share preview: the live or pending record,
+     * else its latest dead one. With $outline, also its shape as GeoJSON,
+     * simplified to about 2 m for drawing.
+     */
+    public static function tenementBrief(string $slug, bool $outline = false): ?object
+    {
+        $geom = $outline ? 'ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.00002), 6)' : 'null';
+
+        return DB::selectOne(
+            "select * from (
+               (select 0 as rank, fmt_tenid, type, status, survstatus, holders, legal_area, area_unit, area_ha,
+                       applied_at, granted_at, ends_at, null as death_reason, $geom as geojson
+                from tenements where pw_slug(fmt_tenid) = ? limit 1)
+               union all
+               (select 1, fmt_tenid, type, 'DEAD', null, holders, null, null, null,
+                       started_at, granted_at, ended_at, death_reason, $geom
+                from dead_tenements where pw_slug(fmt_tenid) = ? order by ended_at desc limit 1)
+             ) t order by rank limit 1",
+            [$slug, $slug]
+        );
+    }
+
+    /** A holder's name, whether every record calls it a company, and its live and pending counts. */
+    public static function holderBrief(string $slug): ?object
+    {
+        $h = DB::selectOne(
+            "select mode() within group (order by h.name) as name, bool_and(h.is_company) as is_company,
+                    count(*) filter (where t.status = 'LIVE') as live,
+                    count(*) filter (where t.status = 'PENDING') as pending,
+                    coalesce(sum(t.area_ha), 0) as area_ha
+             from tenements t cross join lateral unnest(t.holders, t.holder_is_company) as h(name, is_company)
+             where pw_holder_text(t.holders) like ? and pw_slug(h.name) = ?",
+            ['%'.$slug.'%', $slug]
+        );
+        if ($h->name !== null) {
+            return $h;
+        }
+
+        return DB::selectOne(
+            'select h.name, h.is_company, 0 as live, 0 as pending, 0 as area_ha
+             from dead_tenements d cross join lateral unnest(d.holders, d.holders_are_company) as h(name, is_company)
+             where pw_slugs(d.holders) @> array[?]::text[] and pw_slug(h.name) = ?
+             order by h.is_company limit 1',
+            [$slug, $slug]
+        );
+    }
 }

@@ -185,4 +185,65 @@ class Format
 
         return self::localDate($value, $d->format('H:i:s') !== '00:00:00');
     }
+
+    // g-visual: share previews.
+
+    /** Death reasons that read as a verb: "withdrawn on 16 Nov 2026". */
+    private const DEATH_VERBS = ['Surrendered', 'Expired', 'Withdrawn', 'Forfeited', 'Cancelled', 'Refused', 'Lapsed', 'Terminated'];
+
+    /**
+     * A tenement in plain sentences (build spec 3's headline), for share
+     * previews. Takes a row from Register::tenementBrief(). Holder names
+     * stay as registered.
+     */
+    public static function headline(object $t, ?CarbonImmutable $now = null): string
+    {
+        $type = self::sentence($t->type);
+        $names = PgArray::parse($t->holders);
+        $holders = match (count($names)) {
+            0 => '',
+            1 => $names[0],
+            2 => $names[0].' and '.$names[1],
+            default => $names[0].' and '.(count($names) - 1).' others',
+        };
+        $by = $holders === '' ? '' : " by $holders";
+        $applied = self::localDate($t->applied_at);
+        $ends = self::localDate($t->ends_at);
+
+        if ($t->status === 'DEAD') {
+            $how = in_array($t->death_reason, self::DEATH_VERBS, true) ? strtolower($t->death_reason) : 'recorded dead';
+            $span = self::relative($t->applied_at, $t->ends_at ? CarbonImmutable::parse($t->ends_at, 'Australia/Perth') : null);
+            $after = in_array($span, ['', 'today'], true) ? '' : ', after '.str_replace(' ago', '', $span);
+
+            return "$type applied for$by".($applied ? " on $applied" : '')." and $how".($ends ? " on $ends" : '')."$after.";
+        }
+
+        $area = match (true) {
+            $t->legal_area === null => $t->area_ha ? number_format((float) $t->area_ha).' ha' : '',
+            str_starts_with(strtoupper((string) $t->area_unit), 'BL') && $t->area_ha => self::legalArea((float) $t->legal_area, $t->area_unit).', '.number_format((float) $t->area_ha).' ha',
+            default => self::legalArea((float) $t->legal_area, $t->area_unit),
+        };
+
+        if ($t->status === 'PENDING') {
+            $row = config('mineral_fields.'.self::fieldNumber($t->fmt_tenid));
+            $place = match (true) {
+                ! $row => '',
+                $row['district'] !== null => ' in the '.$row['district'].' district',
+                default => ' in the '.$row['field'].' field',
+            };
+            $survey = $t->survstatus ? ', '.strtolower($t->survstatus) : '';
+
+            return trim('Pending '.strtolower($type)." application$by".($applied ? ', lodged '.$applied.' ('.self::relative($t->applied_at, $now).')' : '').'.'
+                .($area !== '' ? ' '.ucfirst("$area$place$survey").'.' : ''));
+        }
+
+        $since = self::localDate($t->granted_at ?: $t->applied_at);
+        $expiry = match (true) {
+            $ends === '' => '',
+            CarbonImmutable::parse($t->ends_at, 'Australia/Perth')->lessThan($now ?? CarbonImmutable::now('Australia/Perth')) => " The expiry date passed on $ends, but the register still lists it as live.",
+            default => " Expires $ends (".self::relative($t->ends_at, $now).').',
+        };
+
+        return "$type held$by".($since ? " since $since" : '').".$expiry".($area !== '' ? " $area." : '');
+    }
 }
