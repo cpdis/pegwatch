@@ -1,6 +1,7 @@
 @php
     $lead = \App\Digest\WeeklyDigest::lead($c);
-    $ha = fn ($n) => number_format((float) $n, 1).' ha';
+    // A no-break space keeps "ha" with its number in narrow table columns.
+    $ha = fn ($n) => number_format((float) $n, 1)."\u{00A0}ha";
     $type = fn ($e) => \App\Support\Format::sentence($e['tenement_type'] ?? '');
     $field = fn ($id) => \App\Support\Format::field($id);
     // Register text can hold Markdown's own characters; escape it inside links and tables.
@@ -38,6 +39,7 @@ Tenements that ended, by the area no other tenement covers.
 | {{ $ten($e) }} | {{ $meta([$md($e['reason'] ?? null), $holders($e['holders']), $field($e['fmt_tenid'])]) }} | {{ $ha($e['uncovered_ha']) }} |
 @endforeach
 </x-mail::table>
+
 @else
 No tenement ended this week leaving a hectare or more with no other tenement over it.
 
@@ -52,6 +54,7 @@ No tenement ended this week leaving a hectare or more with no other tenement ove
 | {{ $ten($e) }} | {{ $meta([$holders($e['holders']), $field($e['fmt_tenid'])]) }} | {{ $e['area_ha'] !== null ? $ha($e['area_ha']) : '' }} |
 @endforeach
 </x-mail::table>
+
 @else
 No new applications this week.
 
@@ -75,6 +78,7 @@ No new applications this week.
 | {{ $ten($r) }} | {{ $meta([$r['release_at'], $field($r['fmt_tenid'])]) }} | {{ $ha($r['area_ha']) }} |
 @endforeach
 </x-mail::table>
+
 @else
 None scheduled.
 @endif

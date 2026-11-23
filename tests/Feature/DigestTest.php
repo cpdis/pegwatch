@@ -215,6 +215,9 @@ class DigestTest extends TestCase
         $html = (new WeeklyDigestMail($issue->week, json_decode($issue->content, true), $s))->render();
         $this->assertStringContainsString('E 15/11', $html);
         $this->assertStringContainsString($s->unsubscribeUrl(), $html);
+        // Every heading renders, including those straight after a table.
+        $this->assertStringNotContainsString('## ', $html);
+        $this->assertStringContainsString('Upcoming compulsory releases', $html);
     }
 
     public function test_ingest_hook_sends_the_digest_when_due(): void
