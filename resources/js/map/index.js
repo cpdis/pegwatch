@@ -1,6 +1,21 @@
 // Alpine component for the MapLibre map. Livewire renders the page; the map is a
 // client-side island (wire:ignore) fed by the vector tiles at /tiles/{layer}/{z}/{x}/{y}.mvt.
 // Each concern lives in its own module so separate pieces of work do not collide.
+//
+// Page config (all optional):
+//   bounds      [w, s, e, n] to fit; without it this is the full map, whose view lives in the URL
+//   url         force URL state on or off
+//   layers      layer toggles over style.js's DEFAULT_LAYERS
+//   highlight   a GeoJSON geometry outlined on top (the tenement or holder shown)
+//   markers     [{ id, point, colour }] event dots; `hovered` lights one
+//   circle      { center, radiusKm } a watch area
+//   pick        clicks dispatch `map-pick` instead of opening the card
+//   focus       { features } one holder's tenements by status, the rest muted (focus.js)
+//   context     { locator, releases } one tenement with its surroundings (focus.js)
+//   draw        true, or { tenement: { slug, fmt_tenid } }: start the watch-area tool (draw.js)
+//
+// Window events in: map-filter, map-layers, map-fly, map-select, watch-start, watch-stop.
+// Window events out: map-moved, watch-shape (draw.js), map-pick (on the element).
 
 import { BASEMAP, BLANK_STYLE, DEFAULT_LAYERS, EMPTY, LAYER_GROUPS, WA_BOUNDS, addLayers, attachRendering } from './style.js';
 import { attachCard } from './card.js';
@@ -59,11 +74,11 @@ export default function tenementMap(config = {}) {
                 addLayers(map);
                 attachRendering(map, this);
                 const { only } = attachFocus(map, config);
-                const card = attachCard(map, this, { only });
+                const draw = attachDraw(map, maplibregl, this, { enabled: full || !!config.draw, auto: !!config.draw, tenement: config.draw?.tenement });
+                const card = attachCard(map, this, { only, busy: draw.busy });
                 const filters = attachFilters(map);
-                cleanups.push(card.destroy, attachControls(map, this, card, { full }));
+                cleanups.push(draw.destroy, card.destroy, attachControls(map, this, card, { full }));
                 if (full) cleanups.push(attachUrlState(map, this, card, defaults)); // embedded maps leave the URL alone
-                attachDraw(map, this);
                 this.listen(card, filters);
                 ready = true;
                 this.sync();
