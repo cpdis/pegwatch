@@ -51,19 +51,21 @@ final class PageMeta
 
     private static function tenement(self $default, string $slug): self
     {
-        $t = Register::tenementBrief($slug);
-        if (! $t) {
+        $record = Register::tenementRecord($slug);
+        if (! $record) {
             return $default;
         }
-        $id = trim($t->fmt_tenid);
-        $status = Format::STATUS_LABELS[Format::statusKey($t->status)];
+        $t = $record['tenement'];
+        $id = $t['fmt_tenid'];
+        $status = Format::STATUS_LABELS[Format::statusKey($t['status'])];
 
         return $default->with(
-            shareTitle: $id.' · '.Format::sentence($t->type).' · '.$status,
-            description: Format::headline($t),
-            canonical: route('tenements.show', Slug::make($id)),
+            shareTitle: $id.' · '.TenementSummary::typeName($t).' · '.$status,
+            // The same sentence the page opens with (T1).
+            description: TenementSummary::headlineText(['tenement' => $t]),
+            canonical: route('tenements.show', $t['slug']),
             image: Route::has('og.tenement')
-                ? route('og.tenement', ['slug' => Slug::make($id), 'v' => Register::latestRun()?->id ?? 0])
+                ? route('og.tenement', ['slug' => $t['slug'], 'v' => Register::latestRun()?->id ?? 0])
                 : null,
             imageAlt: "The outline of $id",
         );

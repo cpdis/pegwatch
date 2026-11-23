@@ -63,7 +63,14 @@ class Register
         return $out;
     }
 
-    public static function tenement(string $slug): ?array
+    /**
+     * A tenement's register record, without the spatial queries: the live or pending
+     * row, else its latest dead one. `tenement` is the page's shape (what
+     * TenementSummary reads); `row` is the database row with its outline.
+     *
+     * @return array{tenement: array, row: object, live: ?object, dead: ?object}|null
+     */
+    public static function tenementRecord(string $slug): ?array
     {
         $t = DB::selectOne(
             'select tenid, fmt_tenid, type, type_code, status, survstatus, holders, holder_is_company,
@@ -122,6 +129,20 @@ class Register
             'ends_at' => $dead->ended_at,
             'dead' => ['reason' => $dead->death_reason, 'ended_at' => $dead->ended_at],
         ]);
+
+        return ['tenement' => $tenement, 'row' => $row, 'live' => $t, 'dead' => $dead];
+    }
+
+    public static function tenement(string $slug): ?array
+    {
+        $record = self::tenementRecord($slug);
+        if (! $record) {
+            return null;
+        }
+        ['tenement' => $tenement, 'row' => $row, 'live' => $t, 'dead' => $dead] = $record;
+        $tenid = $tenement['tenid'];
+        $fmt = $tenement['fmt_tenid'];
+        $holders = $tenement['holders'];
 
         // The outline as hex EWKB, handed back to the spatial queries below. A row with
         // no outline gets an empty one, so those queries find nothing instead of failing.
