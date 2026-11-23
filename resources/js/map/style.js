@@ -6,7 +6,10 @@
 // cross-fades into single tenements between zoom 7.5 and 8.5.
 
 export const WA_BOUNDS = [112.5, -35.5, 129.5, -13.5];
-export const BASEMAP = 'https://tiles.openfreemap.org/styles/positron';
+const BASEMAPS = { light: 'https://tiles.openfreemap.org/styles/positron', dark: 'https://tiles.openfreemap.org/styles/dark' };
+const theme = () => (document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+/** The basemap for the page's appearance. A live binding: attachRendering updates it when the appearance changes. */
+export let BASEMAP = BASEMAPS[theme()];
 // Used if the basemap style cannot be fetched, so the tenement layers still draw.
 export const BLANK_STYLE = { version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#f4f1ea' } }] };
 
@@ -55,6 +58,7 @@ const LAYERS = [
     { id: 'freed-hatch', group: 'freed', type: 'fill', source: 'freed', paint: { 'fill-pattern': pattern('back', FREED_COLOUR) } },
     { id: 'releases-fill', group: 'releases', type: 'fill', source: 'releases', paint: { 'fill-color': STATUS_COLOURS.RELEASE, 'fill-opacity': stateFill(0.1) } },
     { id: 'releases-hatch', group: 'releases', type: 'fill', source: 'releases', paint: { 'fill-pattern': pattern('back', STATUS_COLOURS.RELEASE) } },
+    { id: 'grid-line', group: 'grid', type: 'line', source: 'grid', geojson: true, minzoom: 11, paint: { 'line-color': '#52525b', 'line-opacity': 0.35, 'line-width': 0.6 } },
     { id: 'restrictions-line', group: 'restrictions', type: 'line', source: 'restrictions', paint: { 'line-color': STATUS_COLOURS.RESTRICTED, 'line-width': 1, 'line-dasharray': [2, 2] } },
     { id: 'dead-line', group: 'dead', type: 'line', source: 'dead', paint: { 'line-color': STATUS_COLOURS.DEAD, 'line-width': stateWidth([[6, 0.8], [12, 1.2]]), 'line-dasharray': [1, 2] } },
     { id: 'live-line', group: 'tenements', type: 'line', source: 'tenements', filter: live, minzoom: 7, sort: 'type_code', paint: { 'line-color': typeColour, 'line-width': tenementWidth, 'line-opacity': fadeIn(1) } },
@@ -95,7 +99,10 @@ const MODE_PAINT = {
     },
 };
 
-const LABEL_PAINT = { 'text-color': '#27272a', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 };
+const LABEL_PAINT = {
+    light: { 'text-color': '#27272a', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 },
+    dark: { 'text-color': '#e4e4e7', 'text-halo-color': '#0b0b0c', 'text-halo-width': 1.4 },
+};
 
 /** Vector tile sources at /tiles/{source}/{z}/{x}/{y}.mvt, with the zooms the server fills. */
 const TILE_SOURCES = {
@@ -117,30 +124,37 @@ export const CLICKABLE = [...HOVERABLE, 'release-points'];
 export const LAYER_GROUPS = LAYERS.reduce((g, l) => ({ ...g, [l.group]: [...(g[l.group] ?? []), l.id] }), {});
 
 /** Which groups show when a map first loads. */
-export const DEFAULT_LAYERS = { tenements: true, pending: true, dead: false, releases: true, restrictions: false, freed: true, norecord: false };
+export const DEFAULT_LAYERS = { tenements: true, pending: true, dead: false, releases: true, restrictions: false, freed: true, norecord: false, grid: false };
 
 /** The status filter each layer starts with, so other filters can be combined with it (`['all', base, mine]`). */
 export const BASE_FILTERS = Object.fromEntries(LAYERS.filter((l) => l.filter).map((l) => [l.id, l.filter]));
 
+// Basemap layer and source ids per map, so a style switch keeps everything else.
+const basemaps = new WeakMap();
+
 /** Add every Pegwatch source and layer to a loaded map. */
 export function addLayers(m) {
     const style = m.getStyle();
+    basemaps.set(m, { layers: new Set(style.layers.map((l) => l.id)), sources: new Set(Object.keys(style.sources)) });
     m.on('styleimagemissing', ({ id }) => {
-        const image = patternImage(id);
+        // OpenFreeMap's dark style asks for a town dot its sprite lacks ('circle-11').
+        const image = id === 'circle-11' ? townDot() : patternImage(id);
         if (image && !m.hasImage(id)) m.addImage(id, image.data, { pixelRatio: image.pixelRatio });
     });
+    // A map that starts dark parsed its first basemap tiles before that handler existed.
+    if (BASEMAP === BASEMAPS.dark) for (const [id, s] of Object.entries(style.sources)) if (s.type === 'vector') m.refreshTiles(id);
 
     for (const [id, s] of Object.entries(TILE_SOURCES)) {
         m.addSource(id, { type: 'vector', tiles: [`${window.location.origin}/tiles/${id}/{z}/{x}/{y}.mvt`], maxzoom: 14, ...s });
     }
-    for (const s of ['highlight', 'markers', 'circle']) m.addSource(s, { type: 'geojson', data: EMPTY });
+    for (const s of ['highlight', 'markers', 'circle', 'grid']) m.addSource(s, { type: 'geojson', data: EMPTY });
 
     // Fills, outlines and ID labels go under the basemap's place names, so town names win
     // label collisions; release and freed-ground markers go on top.
     const firstLabel = style.layers.find((l) => l.type === 'symbol')?.id;
     for (const l of LAYERS) {
         if (l.type === 'symbol' && !style.glyphs) continue; // a style without glyphs cannot draw text
-        m.addLayer(layerSpec(l), l.over ? undefined : firstLabel);
+        m.addLayer(layerSpec(l, theme()), l.over ? undefined : firstLabel);
     }
     m.addLayer({ id: 'circle-fill', type: 'fill', source: 'circle', paint: { 'fill-color': '#0ea5e9', 'fill-opacity': 0.08 } });
     m.addLayer({ id: 'circle-line', type: 'line', source: 'circle', paint: { 'line-color': '#0ea5e9', 'line-width': 2 } });
@@ -153,18 +167,23 @@ export function addLayers(m) {
     });
 }
 
-function layerSpec(l) {
+function layerSpec(l, look) {
     return {
         id: l.id,
         type: l.type,
         source: l.source,
-        'source-layer': l.layer ?? l.source,
+        ...(l.geojson ? {} : { 'source-layer': l.layer ?? l.source }),
         ...(l.filter ? { filter: l.filter } : {}),
         ...(l.minzoom ? { minzoom: l.minzoom } : {}),
         ...(l.maxzoom ? { maxzoom: l.maxzoom } : {}),
         layout: { ...l.layout, ...(l.sort ? { [`${l.type}-sort-key`]: typeOrder(l.sort) } : {}) },
-        paint: l.type === 'symbol' ? { ...LABEL_PAINT, ...l.paint } : { ...l.paint, ...MODE_PAINT.status[l.id] },
+        paint: l.type === 'symbol' ? labelPaint(l.id, look) : { ...l.paint, ...MODE_PAINT.status[l.id] },
     };
+}
+
+/** Text colours for the page's appearance; a layer's own paint wins. */
+function labelPaint(id, look) {
+    return { ...LABEL_PAINT[look], ...LAYERS.find((l) => l.id === id)?.paint };
 }
 
 /** Fill ground by status (the default) or by tenement type. */
@@ -211,11 +230,122 @@ function patternImage(name) {
     return { data: g.getImageData(0, 0, size, size), pixelRatio: ratio };
 }
 
-/** Rendering extras that run once the map has loaded. */
+function townDot() {
+    const size = 22;
+    const canvas = Object.assign(document.createElement('canvas'), { width: size, height: size });
+    const g = canvas.getContext('2d');
+    g.fillStyle = '#a1a1aa';
+    g.strokeStyle = '#0b0b0c';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.arc(size / 2, size / 2, 6, 0, 2 * Math.PI);
+    g.fill();
+    g.stroke();
+    return { data: g.getImageData(0, 0, size, size), pixelRatio: 2 };
+}
+
+/** One-minute graticular block lines over the view, from zoom 11. */
+function gridLines(map) {
+    if (map.getZoom() < 11) return EMPTY;
+    const b = map.getBounds();
+    const [w, e, s, n] = [Math.floor(b.getWest() * 60), Math.ceil(b.getEast() * 60), Math.floor(b.getSouth() * 60), Math.ceil(b.getNorth() * 60)];
+    const lines = [];
+    for (let i = w; i <= e; i++) lines.push([[i / 60, s / 60], [i / 60, n / 60]]);
+    for (let j = s; j <= n; j++) lines.push([[w / 60, j / 60], [e / 60, j / 60]]);
+    return { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: lines }, properties: {} };
+}
+
+const CHIP = 'max-w-full rounded-2xl bg-white/90 px-3 py-1 text-center text-xs text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 dark:bg-zinc-900/90 dark:text-zinc-200 dark:ring-white/10';
+
+/** Rendering extras that run once the map has loaded: chips, block grid, colour mode, dark basemap. */
 export function attachRendering(map, component) {
+    const shown = (id) => map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== 'none';
+
+    // Chips at the top centre: what the zoomed-out shading means, and tiles loading.
+    const box = Object.assign(document.createElement('div'), {
+        className: 'pointer-events-none absolute inset-x-12 top-2 z-10 flex flex-col items-center gap-1',
+    });
+    const zoomChip = Object.assign(document.createElement('div'), {
+        className: CHIP,
+        textContent: 'Zoomed out: shaded ground is held or applied for. Zoom in to see each tenement.',
+    });
+    const loadingChip = Object.assign(document.createElement('div'), { className: `${CHIP} animate-pulse`, textContent: 'Loading tenements', role: 'status' });
+    zoomChip.dataset.mapChip = 'zoomed-out';
+    loadingChip.dataset.mapChip = 'loading';
+    box.append(zoomChip, loadingChip);
+    map.getContainer().append(box);
+    const showZoomChip = () => (zoomChip.hidden = !(map.getZoom() < 8 && (shown('coverage-live') || shown('coverage-pending'))));
+    map.on('zoom', showZoomChip);
+    map.on('styledata', showZoomChip);
+    showZoomChip();
+
+    let loading = null;
+    loadingChip.hidden = true;
+    map.on('sourcedataloading', (e) => {
+        if (!(e.sourceId in TILE_SOURCES) || loading) return;
+        loading = setTimeout(() => (loadingChip.hidden = false), 250);
+    });
+    map.on('idle', () => {
+        clearTimeout(loading);
+        loading = null;
+        loadingChip.hidden = true;
+    });
+
+    // The block grid follows the view while it is on.
+    let gridKey = '';
+    const drawGrid = () => {
+        const key = shown('grid-line') ? `${map.getZoom() >= 11}:${map.getBounds().toArray().flat().map((v) => Math.round(v * 60))}` : '';
+        if (key === gridKey) return;
+        gridKey = key;
+        map.getSource('grid')?.setData(key ? gridLines(map) : EMPTY);
+    };
+    map.on('moveend', drawGrid);
+    map.on('styledata', drawGrid);
+
     // Colour mode: the component's `colourMode` ('status' or 'type'), when it has one.
     if ('colourMode' in component) {
         setColourMode(map, component.colourMode);
         component.$watch('colourMode', (mode) => setColourMode(map, mode));
     }
+
+    // Dark basemap when the page is dark. Pegwatch's sources and layers carry over into the new style.
+    let look = BASEMAP === BASEMAPS.dark ? 'dark' : 'light';
+    const follow = () => {
+        if (theme() === look) return;
+        look = theme();
+        BASEMAP = BASEMAPS[look];
+        map.setStyle(BASEMAP, { transformStyle: (prev, next) => keepPegwatch(map, prev, next, look) });
+    };
+    const observer = new MutationObserver(follow);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    map.on('remove', () => observer.disconnect());
+    map.on('style.load', () => {
+        gridKey = '';
+        component.sync?.();
+    });
+    follow();
+}
+
+/** The next basemap style with every non-basemap source and layer of the previous one, in the same places. */
+function keepPegwatch(map, prev, next, look) {
+    const base = basemaps.get(map);
+    const lastBase = prev.layers.findLastIndex((l) => base.layers.has(l.id));
+    const ours = [];
+    prev.layers.forEach((l, i) => {
+        if (!base.layers.has(l.id)) ours.push({ under: i < lastBase, layer: l.type === 'symbol' ? { ...l, paint: labelPaint(l.id, look) } : l });
+    });
+    basemaps.set(map, { layers: new Set(next.layers.map((l) => l.id)), sources: new Set(Object.keys(next.sources)) });
+
+    const at = next.layers.findIndex((l) => l.type === 'symbol');
+    const cut = at === -1 ? next.layers.length : at;
+    return {
+        ...next,
+        sources: { ...next.sources, ...Object.fromEntries(Object.entries(prev.sources).filter(([id]) => !base.sources.has(id))) },
+        layers: [
+            ...next.layers.slice(0, cut),
+            ...ours.filter((l) => l.under).map((l) => l.layer),
+            ...next.layers.slice(cut),
+            ...ours.filter((l) => !l.under).map((l) => l.layer),
+        ],
+    };
 }
