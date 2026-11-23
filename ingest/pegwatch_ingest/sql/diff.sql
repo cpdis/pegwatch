@@ -2,11 +2,6 @@
 -- tenement_events. The run id placeholder is substituted by the runner. Skipped entirely
 -- on the first (baseline) run, when tenements_prev is empty.
 
--- Types that may overlap other tenure (Mining Act: miscellaneous licences,
--- general purpose leases), so they do not count as "covering" ground.
-create or replace function pw_blocks_ground(type_code text) returns boolean
-language sql immutable as $$ select type_code not in ('L', 'G') $$;
-
 create or replace function pw_sorted(a text[]) returns text[]
 language sql immutable as $$ select coalesce(array_agg(distinct x order by x), '{}') from unnest(a) x $$;
 
@@ -64,7 +59,7 @@ classified as (
            where c.geom && g.geom and ST_Intersects(c.geom, g.geom)) as cover_any,
          (select ST_Union(c.geom) from tenements c
            where c.geom && g.geom and ST_Intersects(c.geom, g.geom)
-             and pw_blocks_ground(c.type_code)) as cover_blocking
+             and pw_blocks_ground(c.type_code, c.special_ind, c.fmt_tenid)) as cover_blocking
   from gone g
   left join lateral (
     -- Only a death recorded around now: an old row is an earlier death of a
