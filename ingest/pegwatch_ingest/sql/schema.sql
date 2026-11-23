@@ -1,6 +1,18 @@
 -- Pegwatch ingest schema. Idempotent: safe to run before every ingest.
 create extension if not exists postgis;
 
+-- CREATE INDEX IF NOT EXISTS takes a SHARE lock on the table before it finds
+-- the index, so a re-run queues behind any open writer (a deploy's migration
+-- during the nightly snapshot) and blocks that table's writes meanwhile. Check
+-- the catalogue first, like the ALTER guard below.
+create or replace function pw_ensure_index(name text, definition text) returns void
+language plpgsql as $$
+begin
+  if to_regclass(name) is null then
+    execute format('create index %I on %s', name, definition);
+  end if;
+end $$;
+
 -- Dates in the SLIP layers are local (AWST) calendar dates encoded as
 -- midnight-UTC epoch milliseconds, with times in separate HH:MM:SS strings.
 create or replace function pw_date(ms jsonb) returns date
@@ -80,7 +92,7 @@ create table if not exists tenements (
   area_ha      double precision,
   geom         geometry(MultiPolygon, 4326)
 );
-create index if not exists tenements_geom_idx on tenements using gist (geom);
+select pw_ensure_index('tenements_geom_idx', 'tenements using gist (geom)');
 
 create table if not exists tenements_prev (like tenements including all);
 
@@ -117,8 +129,10 @@ begin
     alter table dead_tenements add column holders_are_company boolean[] not null default '{}';
   end if;
 end $$;
-create index if not exists dead_tenements_geom_idx on dead_tenements using gist (geom);
-create index if not exists dead_tenements_tenid_idx on dead_tenements (tenid);
+select pw_ensure_index('dead_tenements_geom_idx', 'dead_tenements using gist (geom)');
+select pw_ensure_index('dead_tenements_tenid_idx', 'dead_tenements (tenid)');
+-- Dead-history start (min(ended_at)), recent deaths and the freed-ground window.
+select pw_ensure_index('dead_tenements_ended_idx', 'dead_tenements (ended_at)');
 
 create table if not exists release_pending (
   tenid text not null, rlesid text not null, fmt_tenid text, ten_type text,
@@ -153,7 +167,7 @@ create table if not exists land_restrictions (
   props    jsonb,
   geom     geometry(MultiPolygon, 4326)
 );
-create index if not exists land_restrictions_geom_idx on land_restrictions using gist (geom);
+select pw_ensure_index('land_restrictions_geom_idx', 'land_restrictions using gist (geom)');
 
 create table if not exists tenement_events (
   id           bigserial primary key,
@@ -171,6 +185,6 @@ create table if not exists tenement_events (
   geom         geometry(MultiPolygon, 4326),
   created_at   timestamptz not null default now()
 );
-create index if not exists tenement_events_run_idx on tenement_events (run_id);
-create index if not exists tenement_events_type_idx on tenement_events (event_type, created_at);
-create index if not exists tenement_events_geom_idx on tenement_events using gist (geom);
+select pw_ensure_index('tenement_events_run_idx', 'tenement_events (run_id)');
+select pw_ensure_index('tenement_events_type_idx', 'tenement_events (event_type, created_at)');
+select pw_ensure_index('tenement_events_geom_idx', 'tenement_events using gist (geom)');

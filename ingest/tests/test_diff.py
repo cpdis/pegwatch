@@ -232,3 +232,14 @@ def test_schema_reapply_takes_no_exclusive_lock(conn):
             c.execute("set lock_timeout = '1s'")
             c.execute(db.sql_file("schema.sql"))
             c.commit()
+
+
+def test_schema_reapply_does_not_wait_for_open_writers(conn):
+    """A deploy's migration re-runs the schema while the nightly snapshot holds its writes open."""
+    with psycopg.connect(DSN) as writer:
+        for table in READ_TABLES:
+            writer.execute(f"delete from {table} where false")  # ROW EXCLUSIVE until rollback
+        with psycopg.connect(DSN) as c:
+            c.execute("set lock_timeout = '1s'")
+            c.execute(db.sql_file("schema.sql"))
+            c.commit()
