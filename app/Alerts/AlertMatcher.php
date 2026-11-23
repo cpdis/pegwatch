@@ -23,13 +23,16 @@ class AlertMatcher
 
     /**
      * Whether event `e` is news for watch `w`: one of its alert types, inside
-     * its shape or on its holder's tenements, not undone by a later run, and
-     * not a conversion, amalgamation or covered death unless the watch opted in.
+     * its shape or on its holder's tenements (or ones it just transferred away),
+     * not undone by a later run, and not a conversion, amalgamation or covered
+     * death unless the watch opted in.
      */
     private const MATCH = <<<'SQL'
         w.event_types @> jsonb_build_array(e.event_type)
         and not jsonb_exists(e.details, 'reversed_by_run')
-        and case when w.kind = 'holder' then w.holder_slug = any(public.pw_slugs(e.holders))
+        and case when w.kind = 'holder' then w.holder_slug = any(public.pw_slugs(e.holders || array(
+                     -- A transfer's holders are the new ones; the seller is in details.removed.
+                     select jsonb_array_elements_text(case when jsonb_typeof(e.details->'removed') = 'array' then e.details->'removed' end))))
                  else e.geom && w.area and ST_Intersects(e.geom, w.area) end
         and (e.event_type <> 'death' or w.include_covered_deaths or (
              coalesce(e.details->>'kind', 'ended') = 'ended'

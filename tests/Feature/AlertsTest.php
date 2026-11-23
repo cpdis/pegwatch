@@ -138,6 +138,26 @@ class AlertsTest extends TestCase
         $this->assertSame(['P 26/22'], $this->alerted($tenement));
     }
 
+    public function test_a_holder_watch_hears_when_its_holder_transfers_ground_away(): void
+    {
+        Mail::fake();
+        // The event's holders are the new ones; the seller is only in details.removed.
+        $this->event('holder_change', 'E 26/30', ['from' => ['ACME GOLD PTY LTD'], 'to' => ['BUYER PTY LTD'], 'added' => ['BUYER PTY LTD'], 'removed' => ['ACME GOLD PTY LTD']],
+            x: 125.0, holders: '{"BUYER PTY LTD"}', tenType: 'EXPLORATION LICENCE');
+        $this->event('holder_change', 'E 26/31', ['from' => ['OTHER PTY LTD'], 'to' => ['BUYER PTY LTD'], 'added' => ['BUYER PTY LTD'], 'removed' => ['OTHER PTY LTD']],
+            x: 125.1, holders: '{"BUYER PTY LTD"}', tenType: 'EXPLORATION LICENCE');
+
+        $seller = $this->watch(['kind' => 'holder', 'name' => 'ACME GOLD PTY LTD', 'latitude' => null, 'longitude' => null, 'radius_km' => null,
+            'holder_slug' => 'acme-gold-pty-ltd', 'event_types' => ['holder_change']]);
+        $buyer = $this->watch(['kind' => 'holder', 'name' => 'BUYER PTY LTD', 'latitude' => null, 'longitude' => null, 'radius_km' => null,
+            'holder_slug' => 'buyer-pty-ltd', 'event_types' => ['holder_change']]);
+
+        app(AlertMatcher::class)->run($this->run);
+
+        $this->assertSame(['E 26/30'], $this->alerted($seller));
+        $this->assertSame(['E 26/30', 'E 26/31'], $this->alerted($buyer));
+    }
+
     public function test_the_alert_email_leads_with_releases_and_says_what_was_left_uncovered(): void
     {
         Mail::fake();
@@ -205,7 +225,7 @@ class AlertsTest extends TestCase
         $area = $this->watch(['event_types' => ['release_scheduled', 'released']]);
         DB::insert(
             "insert into release_pending (tenid, rlesid, fmt_tenid, ten_type, release_at, geom)
-             values ('E  2600001', 'R1', 'E 26/1', 'EXPLORATION LICENCE', ?, ?::geometry),
+             values ('E  2600001', 'R1', 'E 26/1', 'E', ?, ?::geometry),
                     ('E  2600009', 'R9', 'E 26/9', 'EXPLORATION LICENCE', ?, ?::geometry)",
             [now()->addHours(20), self::square(121.50, -30.80), now()->addHours(20), self::square(125.0, -30.80)]
         );
@@ -216,7 +236,10 @@ class AlertsTest extends TestCase
         Mail::assertSent(ReleaseReminderMail::class, fn ($m) => $m->kind === 'day' && $m->hasTo($area->user->email)
             && array_column($m->releases, 'fmt_tenid') === ['E 26/1']
             && str_contains($m->envelope()->subject, 'E 26/1 releases at')
-            && self::calendarFiles($m) === ['release-e-26-1.ics']);
+            && self::calendarFiles($m) === ['release-e-26-1.ics']
+            // The release layer may carry only the type code; the email names the type.
+            && str_contains($m->render(), 'E 26/1</a></strong> · Exploration licence')
+            && preg_match('/ha\s+\./', $m->render()) === 0);
 
         $this->travelTo(now()->addHours(19)->addMinutes(30));
         $this->assertSame(1, $reminders->run());

@@ -7,6 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
@@ -64,7 +65,7 @@ final class MagicLink
     public static function signIn(Request $request, User $user, string $to, ?string $status = null, bool $intended = false): RedirectResponse
     {
         if (! $user->hasVerifiedEmail()) {
-            $user->markEmailAsVerified();
+            self::claim($user);
         }
         if ($user->hasEnabledTwoFactorAuthentication()) {
             $request->session()->put(['login.id' => $user->getKey(), 'login.remember' => true]);
@@ -75,5 +76,24 @@ final class MagicLink
         $request->session()->regenerate();
 
         return ($intended ? redirect()->intended($to) : redirect()->to($to))->with('status', $status);
+    }
+
+    /**
+     * The first press of a link proves the address for the first time. Whoever
+     * set a password, two-factor or a session on the account before then had not
+     * proved it (they may have signed up with someone else's address, or changed
+     * their email to it), so all of that goes and the owner starts clean.
+     */
+    private static function claim(User $user): void
+    {
+        $user->forceFill([
+            'email_verified_at' => now(),
+            'password' => null,
+            'remember_token' => null,
+            'two_factor_secret' => null,
+            'two_factor_recovery_codes' => null,
+            'two_factor_confirmed_at' => null,
+        ])->save();
+        DB::table(config('session.table', 'sessions'))->where('user_id', $user->getKey())->delete();
     }
 }

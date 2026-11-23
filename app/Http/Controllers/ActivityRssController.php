@@ -43,9 +43,10 @@ class ActivityRssController extends Controller
             $x->writeElement('title', $e['label'].': '.$e['fmt_tenid'].($holders !== '' ? ' ('.$holders.')' : ''));
             $link = $e['slug'] ? route('tenements.show', $e['slug']) : ($e['notice']['link'] ?? $page);
             $x->writeElement('link', $link);
-            $x->writeElement('description', implode('. ', array_filter([
+            // Pieces may end in their own full stop ("Other tenements cover all of it.").
+            $x->writeElement('description', implode('. ', array_filter(array_map(fn ($s) => rtrim((string) $s, '. '), [
                 $e['summary'], Format::field($e['fmt_tenid']), Register::FEED_SOURCES[$e['source']],
-            ])).'.');
+            ]))).'.');
             $x->writeElement('category', $e['label']);
             $x->startElement('guid');
             $x->writeAttribute('isPermaLink', 'false');

@@ -43,7 +43,7 @@ class ReleaseReminderMail extends Mailable
             'items' => array_map(fn ($r) => [
                 'id' => $r['fmt_tenid'],
                 'url' => url('/tenements/'.Slug::make($r['fmt_tenid'])),
-                'meta' => Format::sentence($r['ten_type']),
+                'meta' => WatchAreaDigest::typeName($r['ten_type']),
                 'when' => self::awst($r['release_at'])->format('D j M Y, g:ia').' AWST',
                 'rlesid' => $r['rlesid'],
                 'ha' => $r['area_ha'],

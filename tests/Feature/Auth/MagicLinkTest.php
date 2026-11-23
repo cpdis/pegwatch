@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Mail\LoginLinkMail;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
@@ -117,6 +118,34 @@ class MagicLinkTest extends TestCase
     {
         $this->get('/watch-areas')->assertRedirect(route('login'));
         $this->get(route('login'))->assertSee('Log in to see your watch area.');
+    }
+
+    public function test_an_address_claimed_before_its_owner_proved_it_comes_without_the_claimers_password(): void
+    {
+        // Someone signs up as pat@example.com (or changes their email to it) without
+        // owning the address, sets a password and two-factor, and stays signed in.
+        $claimer = User::factory()->unverified()->withTwoFactor()->create(['email' => 'pat@example.com', 'password' => 'claimers-password']);
+        DB::table('sessions')->insert(['id' => 'claimer-session', 'user_id' => $claimer->id, 'payload' => '', 'last_activity' => time()]);
+
+        // Pat presses a login link: Pat gets the account, and the claimer's way in is gone.
+        $this->post($this->linkFor('pat@example.com'))->assertRedirect(route('watch-areas.index'));
+        $this->assertAuthenticatedAs($claimer);
+        $claimer->refresh();
+        $this->assertTrue($claimer->hasVerifiedEmail());
+        $this->assertNull($claimer->password);
+        $this->assertFalse($claimer->hasEnabledTwoFactorAuthentication());
+        $this->assertDatabaseMissing('sessions', ['id' => 'claimer-session']);
+
+        $this->post(route('logout'));
+        $this->post(route('login.store'), ['email' => 'pat@example.com', 'password' => 'claimers-password'])->assertSessionHasErrors();
+        $this->assertGuest();
+    }
+
+    public function test_a_verified_account_keeps_its_password_after_a_link_sign_in(): void
+    {
+        $user = User::factory()->create(['email' => 'pat@example.com']);
+        $this->post($this->linkFor('pat@example.com'));
+        $this->assertNotNull($user->refresh()->password);
     }
 
     public function test_an_unsigned_link_url_is_rejected(): void

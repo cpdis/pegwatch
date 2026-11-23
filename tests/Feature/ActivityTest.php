@@ -217,6 +217,17 @@ class ActivityTest extends TestCase
     public function test_rss_is_valid_and_takes_the_same_filters(): void
     {
         self::seedRegister();
+        DB::insert(
+            "insert into tenement_events (run_id, event_type, tenid, fmt_tenid, tenement_type, holders, details, occurred_at, geom)
+             values (?, 'death', 'E  1500009', 'E 15/9', 'EXPLORATION LICENCE', '{\"BETA PTY LTD\"}', '{\"kind\": \"ended\", \"area_ha\": 10, \"uncovered_share\": 0}', ?, ?::geometry)",
+            [DB::table('ingest_runs')->max('id'), self::local(-1), self::square(125.10, -30.80)]
+        );
+        // Summaries end in a full stop already ("Other tenements cover all of it."); the description must not double it.
+        $all = simplexml_load_string($this->get('/activity.rss')->getContent());
+        $this->assertGreaterThan(3, count($all->channel->item));
+        foreach ($all->channel->item as $item) {
+            $this->assertStringNotContainsString('..', (string) $item->description);
+        }
         $r = $this->get('/activity.rss?types[]=application')->assertOk();
         $this->assertStringStartsWith('application/rss+xml', $r->headers->get('Content-Type'));
         $this->assertNull($r->headers->get('Set-Cookie'));

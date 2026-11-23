@@ -5,7 +5,7 @@ Compulsory releases in your watch "{{ $area->name }}". Applications lodged in th
 
 @foreach ($items as $item)
 **[{{ $item['id'] }}]({{ $item['url'] }})**@if ($item['meta']) · {{ $item['meta'] }}@endif<br>
-{{ $item['when'] }}. Release {{ $item['rlesid'] }}@if ($item['ha']), {{ $item['ha'] }} ha @endif.
+{{ $item['when'] }}. Release {{ $item['rlesid'] }}{{ $item['ha'] ? ', '.$item['ha'].' ha' : '' }}.
 
 @endforeach
 A calendar file for each release is attached.
