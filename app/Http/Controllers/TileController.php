@@ -57,7 +57,8 @@ class TileController extends Controller
                                     select t.tenid, cardinality(t.holders) as holders_n,
                                            round(t.area_ha::numeric, (t.area_ha < 10)::int)::float8 as ha,
                                            to_char(t.applied_at, 'YYYY-MM-DD') as applied,
-                                           to_char(t.granted_at, 'YYYY-MM-DD') as granted,
+                                           -- The card reads the grant date only when there is no expiry to show.
+                                           case when t.ends_at is null or t.ends_at >= timestamp '2999-01-01' then to_char(t.granted_at, 'YYYY-MM-DD') end as granted,
                                            case when t.ends_at < timestamp '2999-01-01' then to_char(t.ends_at, 'YYYY-MM-DD') end as ends,
                                            (select to_char(min(r.release_at at time zone 'Australia/Perth'), 'YYYY-MM-DD HH24:MI')
                                               from release_pending r where r.tenid = t.tenid) as rel_at,

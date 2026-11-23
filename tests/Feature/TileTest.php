@@ -111,7 +111,7 @@ class TileTest extends TestCase
         $this->assertSame(2, $live['holders_n']);
         $this->assertEquals(105, $live['ha']);
         $this->assertSame('2025-01-02', $live['applied']);
-        $this->assertSame('2025-06-01', $live['granted']);
+        $this->assertArrayNotHasKey('granted', $live, 'the card shows the expiry, so the grant date is left out');
         $this->assertSame('2030-01-01', $live['ends']);
         $this->assertSame('2026-12-02 08:30', $live['rel_at']);
         $this->assertSame('SURVEYED', $live['survstatus']);
