@@ -6,6 +6,7 @@ use App\Alerts\AlertMatcher;
 use App\Mail\WatchAreaDigest;
 use App\Models\User;
 use App\Models\WatchArea;
+use App\Support\Format;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -108,6 +109,61 @@ class PegwatchTest extends TestCase
         $this->assertGreaterThan(50, strlen($res->getContent()));
 
         $this->get('/tiles/nope/1/0/0.mvt')->assertNotFound();
+    }
+
+    public function test_tiles_carry_no_cookies_and_are_gzipped_for_clients_that_accept_it(): void
+    {
+        self::seedRegister();
+        $n = 2 ** 12;
+        $x = (int) floor((121.505 + 180) / 360 * $n);
+        $lat = deg2rad(-30.795);
+        $y = (int) floor((1 - log(tan($lat) + 1 / cos($lat)) / M_PI) / 2 * $n);
+
+        $plain = $this->get("/tiles/tenements/12/$x/$y.mvt", ['Accept-Encoding' => 'identity'])->assertOk()
+            ->assertHeaderMissing('Set-Cookie')->assertHeaderMissing('Content-Encoding');
+        $gzipped = $this->get("/tiles/tenements/12/$x/$y.mvt", ['Accept-Encoding' => 'gzip, br'])->assertOk()
+            ->assertHeaderMissing('Set-Cookie')->assertHeader('Content-Encoding', 'gzip');
+        $this->assertSame($plain->getContent(), gzdecode($gzipped->getContent()));
+
+        // An empty tile has no body to compress.
+        $this->get('/tiles/tenements/12/0/0.mvt', ['Accept-Encoding' => 'gzip'])->assertOk()
+            ->assertHeaderMissing('Content-Encoding')->assertContent('');
+    }
+
+    public function test_ingest_hook_prunes_expired_rows_from_the_database_cache(): void
+    {
+        config(['cache.default' => 'database', 'services.ingest.token' => 'secret']);
+        DB::table('cache')->insert([
+            ['key' => 'tile:gz:1:tenements:5:26:18', 'value' => 'old', 'expiration' => now()->subHour()->getTimestamp()],
+            ['key' => 'tile:gz:2:tenements:5:26:18', 'value' => 'new', 'expiration' => now()->addHour()->getTimestamp()],
+        ]);
+
+        $this->withToken('secret')->postJson('/hooks/ingest-complete')->assertOk();
+
+        $this->assertSame(['tile:gz:2:tenements:5:26:18'], DB::table('cache')->pluck('key')->all());
+    }
+
+    public function test_event_lists_do_not_repeat_holders_or_lead_with_a_separator(): void
+    {
+        $runId = self::seedRegister();
+        DB::insert("insert into tenement_events (run_id, event_type, tenid, fmt_tenid, holders, details, geom)
+            values (?, 'holder_change', 'E  1500001', 'E 15/1', '{\"ACME GOLD PTY LTD\"}', '{\"added\": [\"ACME GOLD PTY LTD\"], \"removed\": [\"OLD CO PTY LTD\"]}', ?::geometry),
+                   (?, 'appeared', 'E  1500001', 'E 15/1', '{\"ACME GOLD PTY LTD\"}', '{}', ?::geometry)",
+            [$runId, self::square(121.50, -30.80), $runId, self::square(121.50, -30.80)]);
+
+        $text = preg_replace('/\s+/', ' ', strip_tags($this->get('/activity')->assertOk()->getContent()));
+        $this->assertStringContainsString('Added: ACME GOLD PTY LTD; removed: OLD CO PTY LTD', $text);
+        $this->assertStringNotContainsString('· ACME GOLD PTY LTD', $text);
+    }
+
+    public function test_register_units_and_counts_read_as_words(): void
+    {
+        $this->assertSame('14 blocks', Format::legalArea(14, 'BL.'));
+        $this->assertSame('1 block', Format::legalArea(1, 'BL.'));
+        $this->assertSame('9.715 ha', Format::legalArea(9.715, 'HA.'));
+
+        self::seedRegister();
+        $this->get('/holders/smith-john')->assertOk()->assertSee('No dead tenements on record.');
     }
 
     public function test_free_plan_allows_one_watch_area(): void

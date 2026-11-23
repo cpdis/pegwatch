@@ -34,18 +34,22 @@ new #[Layout('layouts::map'), Title('WA tenement map')] class extends Component 
 <div class="flex flex-1 flex-col md:flex-row"
      x-data="tenementMap({ markers: @js($markers) })"
      x-on:event-hover.window="hovered = $event.detail.id">
-    <aside class="w-full overflow-y-auto border-b border-zinc-200 p-4 md:h-[calc(100vh-7.5rem)] md:w-96 md:border-e md:border-b-0 dark:border-zinc-700">
+    {{-- On a phone the map comes first: the list of changes is long and would push it off the screen. --}}
+    <aside class="order-2 w-full overflow-y-auto border-t border-zinc-200 p-4 md:order-1 md:h-[calc(100dvh-7.5rem)] md:w-96 md:border-e md:border-t-0 dark:border-zinc-700">
         <flux:heading size="lg" level="1">{{ __('Every WA mining tenement, live, pending and dead') }}</flux:heading>
         <flux:text class="mt-1">
             {{ number_format($totals['LIVE']) }} live and {{ number_format($totals['PENDING']) }} pending.
             {{ __('Free email alerts when a tenement near you is recorded dead or has ground scheduled for release.') }}
         </flux:text>
 
-        <flux:checkbox.group :label="__('Layers')" class="mt-4">
-            @foreach ($layerLabels as $key => $label)
-                <flux:checkbox x-model="layers.{{ $key }}" :label="$label" />
-            @endforeach
-        </flux:checkbox.group>
+        {{-- The margin goes on a wrapper: the group puts its class on the inner list, not the field. --}}
+        <div class="mt-5">
+            <flux:checkbox.group :label="__('Layers')">
+                @foreach ($layerLabels as $key => $label)
+                    <flux:checkbox x-model="layers.{{ $key }}" :label="$label" />
+                @endforeach
+            </flux:checkbox.group>
+        </div>
 
         <div class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
             @foreach (Format::TYPE_NAMES as $code => $name)
@@ -62,7 +66,7 @@ new #[Layout('layouts::map'), Title('WA tenement map')] class extends Component 
         <flux:heading class="mt-6 mb-1">{{ __('Latest changes') }}</flux:heading>
         <x-event-list :events="$events" compact />
     </aside>
-    <div wire:ignore class="min-h-[60vh] flex-1">
-        <div x-ref="map" class="h-full min-h-[60vh] w-full"></div>
+    <div wire:ignore class="order-1 h-[60dvh] md:order-2 md:h-auto md:flex-1">
+        <div x-ref="map" class="h-full w-full"></div>
     </div>
 </div>

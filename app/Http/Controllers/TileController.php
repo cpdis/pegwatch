@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Support\Register;
+use Illuminate\Cache\DatabaseStore;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +14,9 @@ use Illuminate\Support\Facades\DB;
  * run, so each tile is computed at most once a night. The plan's PMTiles
  * build (tippecanoe in the nightly job) can replace this without changing
  * the map, since both serve the same layers and fields.
+ *
+ * The route runs without the web middleware, so a tile response carries no
+ * cookies and the CDN can cache it. Tiles are stored and sent gzipped.
  */
 class TileController extends Controller
 {
@@ -48,7 +53,7 @@ class TileController extends Controller
         ],
     ];
 
-    public function show(string $layer, int $z, int $x, int $y): Response
+    public function show(Request $request, string $layer, int $z, int $x, int $y): Response
     {
         abort_unless(isset(self::LAYERS[$layer]), 404);
         abort_if($z > 16 || $x < 0 || $y < 0 || $x >= 2 ** $z || $y >= 2 ** $z, 404);
@@ -58,7 +63,7 @@ class TileController extends Controller
 
         $tile = '';
         if ($z >= $def['min_zoom']) {
-            $tile = Cache::remember("tile:$runId:$layer:$z:$x:$y", now()->addDay(), function () use ($def, $layer, $z, $x, $y) {
+            $tile = Cache::remember("tile:gz:$runId:$layer:$z:$x:$y", now()->addDay(), function () use ($def, $layer, $z, $x, $y) {
                 $inner = str_replace(':z', (string) $z, $def['sql']);
                 $row = DB::selectOne(
                     "with b as (select ST_TileEnvelope(?, ?, ?) as env,
@@ -69,13 +74,40 @@ class TileController extends Controller
                     [$z, $x, $y, $z, $x, $y, $z, $layer]
                 );
 
-                return $row->tile ?? '';
+                $mvt = base64_decode($row->tile ?? '');
+
+                return $mvt === '' ? '' : base64_encode(gzencode($mvt, 6));
             });
         }
 
-        return response(base64_decode($tile), 200, [
+        $headers = [
             'Content-Type' => 'application/vnd.mapbox-vector-tile',
             'Cache-Control' => 'public, max-age=3600',
-        ]);
+            'Vary' => 'Accept-Encoding',
+        ];
+        $body = base64_decode($tile);
+        if ($body !== '' && in_array('gzip', $request->getEncodings(), true)) {
+            $headers['Content-Encoding'] = 'gzip';
+        } elseif ($body !== '') {
+            $body = gzdecode($body);
+        }
+
+        return response($body, 200, $headers);
+    }
+
+    /**
+     * The database cache store never deletes a row nobody reads again, and tile
+     * keys change with every ingest run. Called after each run so last night's
+     * tiles do not pile up in the cache table.
+     */
+    public static function pruneExpired(): int
+    {
+        $store = Cache::getStore();
+        if (! $store instanceof DatabaseStore) {
+            return 0;
+        }
+
+        return $store->getConnection()->table(config('cache.stores.database.table', 'cache'))
+            ->where('expiration', '<', now()->getTimestamp())->delete();
     }
 }

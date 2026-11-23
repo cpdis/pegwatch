@@ -11,7 +11,9 @@ Route::livewire('tenements/{slug}', 'pages::tenements.show')->name('tenements.sh
 Route::livewire('holders/{slug}', 'pages::holders.show')->name('holders.show');
 
 Route::get('tiles/{layer}/{z}/{x}/{y}.mvt', [TileController::class, 'show'])
-    ->where(['z' => '[0-9]{1,2}', 'x' => '[0-9]{1,7}', 'y' => '[0-9]{1,7}'])->name('tiles');
+    ->where(['z' => '[0-9]{1,2}', 'x' => '[0-9]{1,7}', 'y' => '[0-9]{1,7}'])
+    // No session or cookies: tiles are public, and a cookie stops the CDN caching them.
+    ->withoutMiddleware('web')->name('tiles');
 
 Route::post('hooks/ingest-complete', IngestHookController::class)
     ->withoutMiddleware([PreventRequestForgery::class])->name('hooks.ingest');
