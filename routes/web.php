@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DigestUnsubscribeController;
 use App\Http\Controllers\IngestHookController;
+use App\Http\Controllers\ReleaseIcsController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\TileController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -27,6 +28,9 @@ Route::get('tiles/{layer}/{z}/{x}/{y}.mvt', [TileController::class, 'show'])
     ->where(['z' => '[0-9]{1,2}', 'x' => '[0-9]{1,7}', 'y' => '[0-9]{1,7}'])
     // No session or cookies: tiles are public, and a cookie stops the CDN caching them.
     ->withoutMiddleware('web')->name('tiles');
+
+// c-tenement
+Route::get('tenements/{slug}/release.ics', ReleaseIcsController::class)->name('tenements.release-ics');
 
 Route::post('hooks/ingest-complete', IngestHookController::class)
     ->withoutMiddleware([PreventRequestForgery::class])->name('hooks.ingest');
