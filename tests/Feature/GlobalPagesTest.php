@@ -35,6 +35,55 @@ class GlobalPagesTest extends TestCase
         return $run;
     }
 
+    public function test_the_header_shows_a_grey_chip_with_the_extract_time_when_the_register_is_fresh(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-23 06:00:00', 'UTC'));
+        self::seedRegister('2026-11-22 20:11:00+00');
+
+        $html = preg_replace('/\s+/', ' ', $this->get('/activity')->assertOk()->getContent());
+
+        $chip = $this->between($html, 'data-test="freshness-chip"', '</button>');
+        $this->assertStringContainsString('Register 23 Nov, 4:11am', $chip);
+        $this->assertStringContainsString('bg-zinc-400', $chip);
+        $this->assertStringContainsString('The department publishes a new extract most business days. Pegwatch checks every night. Last check: 23 Nov, 6:00am AWST.', $html);
+        $this->assertStringContainsString('href="'.route('data').'"', $html);
+    }
+
+    public function test_the_chip_turns_amber_with_the_age_when_the_run_is_stale_or_the_extract_is_over_72_hours_old(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-23 06:00:00', 'UTC'));
+        // Stale by the run's flag alone: the extract is only 34 hours old.
+        $run = self::seedRegister('2026-11-21 20:11:00+00', stale: true);
+
+        $chip = $this->between($this->get('/')->assertOk()->getContent(), 'data-test="freshness-chip"', '</button>');
+        $this->assertStringContainsString('Register 22 Nov · 1 day old', $chip);
+        $this->assertStringContainsString('bg-amber-500', $chip);
+
+        // Not stale by the run's flag, but the extract is four days old.
+        DB::table('ingest_runs')->where('id', $run)->update(['stale' => false, 'tenements_extract' => '2026-11-18 20:11:00+00']);
+        $chip = $this->between($this->get('/')->getContent(), 'data-test="freshness-chip"', '</button>');
+        $this->assertStringContainsString('Register 19 Nov · 4 days old', $chip);
+
+        // The phone menu carries the same words.
+        $this->get('/')->assertSee('data-test="freshness-inline"', false);
+    }
+
+    public function test_no_chip_before_the_first_run(): void
+    {
+        $this->get('/activity')->assertOk()->assertDontSee('freshness-chip');
+    }
+
+    public function test_the_footer_is_one_legal_line_with_tengraph_and_data_links(): void
+    {
+        self::seedRegister();
+        $footer = $this->between($this->get('/activity')->getContent(), 'data-test="site-footer"', '</footer>');
+        $text = preg_replace('/\s+/', ' ', strip_tags($footer));
+
+        $this->assertStringContainsString('A screening aid, not advice. Confirm in TENGRAPH and with the Mining Registrar. Data © State of WA (DMPE), CC BY 4.0, changes made. Data and disclaimer', $text);
+        $this->assertStringContainsString('href="'.Format::TENGRAPH_URL.'"', $footer);
+        $this->assertStringContainsString('href="'.route('data').'"', $footer);
+    }
+
     public function test_the_brand_says_pegwatch_whatever_app_name_says(): void
     {
         config(['app.name' => 'pegwatch']);
@@ -108,5 +157,13 @@ class GlobalPagesTest extends TestCase
             '<meta name="description" content="The WA mining register, 16 Nov 2026 to 23 Nov 2026: 12 new applications, 1 tenement dead, no releases scheduled." />',
             false
         );
+    }
+
+    private function between(string $html, string $from, string $to): string
+    {
+        $start = strpos($html, $from);
+        $this->assertNotFalse($start, "Missing $from");
+
+        return substr($html, $start, strpos($html, $to, $start) - $start);
     }
 }
