@@ -31,6 +31,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.png" type="image/png" sizes="96x96">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="pegwatch-map" content="{{ json_encode(\App\Support\Format::mapConfig()) }}" />
 
 {{-- Pages add head tags here with @push('head'), e.g. robots for natural-person holder pages. --}}
 @stack('head')
