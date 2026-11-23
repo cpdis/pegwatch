@@ -97,3 +97,50 @@ label,
 [role='button'] {
     touch-action: manipulation;
 }
+
+/*
+ * g-visual: the type scale. Flux headings get heavier and tighter as they
+ * grow, numbers in tables line up, and small-caps labels share one style
+ * (the `eyebrow` utility, used by <x-eyebrow>). The doubled attribute
+ * outranks Flux's own font-medium; a page can still override with `!`.
+ */
+[data-flux-heading][data-flux-heading] {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+[data-flux-heading][data-flux-heading].text-2xl {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+
+[data-flux-heading][data-flux-heading].text-4xl {
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+}
+
+h1,
+h2 {
+    text-wrap: balance;
+}
+
+@layer base {
+    table {
+        font-variant-numeric: tabular-nums;
+    }
+}
+
+@utility eyebrow {
+    font-size: 11px;
+    line-height: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-zinc-500);
+
+    &:where(.dark, .dark *) {
+        color: var(--color-zinc-400);
+    }
+}
