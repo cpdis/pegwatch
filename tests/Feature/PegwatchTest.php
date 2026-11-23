@@ -61,7 +61,7 @@ class PegwatchTest extends TestCase
         self::seedRegister();
 
         $this->get('/tenements/e-15-1')->assertOk()
-            ->assertSeeInOrder(['E 15/1', 'ACME GOLD PTY LTD', 'Overlapping (1)', 'P 15/2']);
+            ->assertSeeInOrder(['E 15/1', 'ACME GOLD PTY LTD', 'Overlapping tenements', '(1)', 'P 15/2']);
         $this->get('/tenements/nope-1')->assertNotFound();
 
         $this->get('/tenements/e-99-999')->assertNotFound();
@@ -264,7 +264,8 @@ class PegwatchTest extends TestCase
         self::seedRegister();
         DB::update("update tenements set type = null, status = null where tenid = 'P  1500002'");
         $this->get('/holders/smith-john')->assertOk()->assertSee('P 15/2');
-        $this->get('/tenements/e-15-1')->assertOk()->assertSee('unknown type');
+        // No type: the name comes from the type code.
+        $this->get('/tenements/e-15-1')->assertOk()->assertSeeInOrder(['P 15/2', 'Prospecting licence']);
     }
 
     public function test_hook_without_a_run_id_alerts_on_every_recent_run(): void
