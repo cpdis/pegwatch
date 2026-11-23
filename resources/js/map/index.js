@@ -8,6 +8,7 @@ import { addControls, attachControls } from './controls.js';
 import { attachUrlState, layersFrom, parseHash } from './url.js';
 import { attachDraw } from './draw.js';
 import { attachFilters } from './filters.js';
+import { attachFocus, padBounds } from './focus.js';
 import { circlePolygon } from './util.js';
 
 export default function tenementMap(config = {}) {
@@ -35,7 +36,7 @@ export default function tenementMap(config = {}) {
             if (!this.$refs.map?.isConnected) return;
             const view = fromUrl
                 ? { center: [fromUrl.lng, fromUrl.lat], zoom: fromUrl.zoom }
-                : { bounds: config.bounds ?? WA_BOUNDS, fitBoundsOptions: { padding: 40, maxZoom: 13 } };
+                : { bounds: config.context && config.bounds ? padBounds(config.bounds) : (config.bounds ?? WA_BOUNDS), fitBoundsOptions: { padding: 40, maxZoom: 13 } };
             map = new maplibregl.Map({
                 container: this.$refs.map,
                 style: BASEMAP,
@@ -57,7 +58,8 @@ export default function tenementMap(config = {}) {
             map.on('load', () => {
                 addLayers(map);
                 attachRendering(map, this);
-                const card = attachCard(map, this);
+                const { only } = attachFocus(map, config);
+                const card = attachCard(map, this, { only });
                 const filters = attachFilters(map);
                 cleanups.push(card.destroy, attachControls(map, this, card, { full }));
                 if (full) cleanups.push(attachUrlState(map, this, card, defaults)); // embedded maps leave the URL alone
