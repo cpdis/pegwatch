@@ -163,26 +163,34 @@ class TileController extends Controller
         abort_if($z > 16 || $x < 0 || $y < 0 || $x >= 2 ** $z || $y >= 2 ** $z, 404);
 
         $def = self::TILES[$layer];
-        $runId = Register::latestRun()?->id ?? 0;
-
-        $tile = '';
-        if ($z >= $def['min_zoom'] && $z <= ($def['max_zoom'] ?? 16)) {
-            $tile = Cache::remember("tile:gz:$runId:$layer:$z:$x:$y", now()->addDay(), fn () => self::render($def['layers'], $z, $x, $y));
-        }
+        // A tile changes when a run lands or when this file's SQL changes on deploy.
+        $version = (Register::latestRun()?->id ?? 0).'-'.substr(md5(serialize(self::TILES)), 0, 8);
 
         $headers = [
             'Content-Type' => 'application/vnd.mapbox-vector-tile',
-            'Cache-Control' => 'public, max-age=3600',
+            // Tiles change once a night. A CDN may keep one an hour and serve it stale
+            // while it revalidates; the ETag makes that revalidation a 304.
+            'Cache-Control' => 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
             'Vary' => 'Accept-Encoding',
         ];
+        $response = response('', 200, $headers)->setEtag($version, weak: true);
+        if ($response->isNotModified($request)) {
+            return $response;
+        }
+
+        $tile = '';
+        if ($z >= $def['min_zoom'] && $z <= ($def['max_zoom'] ?? 16)) {
+            $tile = Cache::remember("tile:gz:$version:$layer:$z:$x:$y", now()->addDay(), fn () => self::render($def['layers'], $z, $x, $y));
+        }
+
         $body = base64_decode($tile);
         if ($body !== '' && in_array('gzip', $request->getEncodings(), true)) {
-            $headers['Content-Encoding'] = 'gzip';
+            $response->headers->set('Content-Encoding', 'gzip');
         } elseif ($body !== '') {
             $body = gzdecode($body);
         }
 
-        return response($body, 200, $headers);
+        return $response->setContent($body);
     }
 
     /**

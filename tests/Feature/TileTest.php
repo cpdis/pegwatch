@@ -215,6 +215,25 @@ class TileTest extends TestCase
         DB::table('ingest_runs')->insert(['status' => 'ok', 'finished_at' => now(), 'tenements_extract' => now(), 'stale' => false]);
         $this->assertNotEmpty($this->tile('coverage', 5)['coverage']);
     }
+
+    public function test_tiles_are_cacheable_by_a_cdn_and_revalidate_per_run(): void
+    {
+        self::seedRegister();
+        [$x, $y] = self::xy(10, ...self::KALGOORLIE);
+        $url = "/tiles/tenements/10/$x/$y.mvt";
+
+        $first = $this->get($url)->assertOk();
+        $this->assertStringContainsString('public', $first->headers->get('Cache-Control'));
+        $this->assertStringContainsString('s-maxage=3600', $first->headers->get('Cache-Control'));
+        $etag = $first->headers->get('ETag');
+        $this->assertNotEmpty($etag);
+
+        $this->get($url, ['If-None-Match' => $etag])->assertStatus(304)->assertContent('');
+
+        // A new run changes every tile's validator, so caches fetch the new tiles.
+        DB::table('ingest_runs')->insert(['status' => 'ok', 'finished_at' => now(), 'tenements_extract' => now(), 'stale' => false]);
+        $this->get($url, ['If-None-Match' => $etag])->assertOk()->assertHeader('Content-Type', 'application/vnd.mapbox-vector-tile');
+    }
 }
 
 /** Just enough of a Mapbox Vector Tile decoder to read layers, feature types and properties. */
