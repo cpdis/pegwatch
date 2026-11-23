@@ -177,6 +177,22 @@ class GlobalPagesTest extends TestCase
         );
     }
 
+    public function test_a_missing_tenement_gets_a_pegwatch_404_that_names_the_id(): void
+    {
+        self::seedRegister();
+
+        $this->get('/tenements/e-99-999')->assertNotFound()
+            ->assertSee('<title>Not found · Pegwatch</title>', false)
+            ->assertSee('data-flux-brand', false)
+            ->assertSeeInOrder(['No tenement', 'E 99/999', 'on the register or in the dead history.'])
+            ->assertSee('href="'.Format::TENGRAPH_URL.'"', false)
+            ->assertSee('Search tenements and holders');
+
+        $this->get('/no-such-page')->assertNotFound()
+            ->assertSee('Nothing at this address.')
+            ->assertSee('data-test="site-footer"', false);
+    }
+
     public function test_the_tenement_share_image_is_a_1200_by_630_png(): void
     {
         self::seedRegister();
