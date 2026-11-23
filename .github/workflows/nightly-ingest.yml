@@ -54,9 +54,9 @@ jobs:
       HOOK_URL: ${{ secrets.PEGWATCH_HOOK_URL }}
       HOOK_TOKEN: ${{ secrets.PEGWATCH_INGEST_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -102,7 +102,7 @@ jobs:
             "$DATABASE_URL" -f backup/history.dump
           ls -lh backup
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() && env.USE_ARTIFACT != 'true' }}
         with:
           name: pegwatch-history
@@ -128,14 +128,14 @@ jobs:
             "$DATABASE_URL" -f state/state.dump
           ls -lh state
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ env.USE_ARTIFACT == 'true' }}
         with:
           name: pegwatch-state
           path: state/state.dump
           retention-days: 30
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: report
           path: report/
