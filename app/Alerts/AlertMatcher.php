@@ -5,6 +5,7 @@ namespace App\Alerts;
 use App\Mail\WatchAreaDigest;
 use App\Models\WatchArea;
 use App\Support\Register;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
@@ -14,6 +15,9 @@ use Illuminate\Support\Facades\Mail;
  */
 class AlertMatcher
 {
+    /** When the nightly check runs, AWST (.github/workflows/nightly-ingest.yml, cron 0 11 * * * UTC). */
+    public const NIGHTLY_CHECK_AWST = '19:00';
+
     /** A death leaving less ground than this with no other blocking tenement over it is not news (G15). */
     public const MIN_UNCOVERED_HA = 1;
 
@@ -114,6 +118,15 @@ class AlertMatcher
              group by d.sent_at order by d.sent_at desc limit ?',
             [$area->id, $limit]
         ));
+    }
+
+    /** "today about 7pm AWST" or "tomorrow about 7pm AWST": when changes are next looked for. */
+    public static function nextCheck(): string
+    {
+        $now = CarbonImmutable::now('Australia/Perth');
+        $next = $now->setTimeFromTimeString(self::NIGHTLY_CHECK_AWST);
+
+        return ($next->isAfter($now) ? __('today') : __('tomorrow')).' '.__('about :time AWST', ['time' => $next->format('ga')]);
     }
 
     private static function match(): string

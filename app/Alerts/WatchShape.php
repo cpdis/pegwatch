@@ -4,6 +4,7 @@ namespace App\Alerts;
 
 use App\Models\WatchArea;
 use App\Support\Format;
+use App\Support\Slug;
 use Illuminate\Support\Facades\DB;
 use Livewire\Wireable;
 
@@ -245,6 +246,25 @@ final class WatchShape implements Wireable
             'live' => (int) $r->live_n, 'pending' => (int) $r->pending_n, 'deaths' => (int) $r->deaths_n,
             'applications' => (int) $r->applications_n, 'releases' => (int) $r->releases_n,
         ];
+    }
+
+    /**
+     * Live and pending tenements inside, pending first then newest.
+     *
+     * @return list<array{fmt_tenid: string, slug: string, status: string, type: ?string, holder: ?string}>
+     */
+    public function tenements(int $limit = 10): array
+    {
+        [$from, $bind] = $this->source('t');
+
+        return array_map(fn ($r) => [
+            'fmt_tenid' => trim($r->fmt_tenid), 'slug' => Slug::make($r->fmt_tenid), 'status' => (string) $r->status,
+            'type' => $r->type, 'holder' => $r->holder,
+        ], DB::select(
+            "select t.fmt_tenid, t.status, t.type, t.holders[1] as holder from {$from}
+             order by t.status = 'PENDING' desc, t.applied_at desc nulls last limit ?",
+            [...$bind, $limit]
+        ));
     }
 
     /**
