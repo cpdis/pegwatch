@@ -13,6 +13,8 @@ export default function tenementMap(config = {}) {
     let map = null;
     let ready = false;
     const cleanups = [];
+    // The full map page (no bounds of its own), as opposed to a map embedded in a tenement or holder page.
+    const full = config.url ?? !config.bounds;
 
     return {
         layers: { ...DEFAULT_LAYERS, ...(config.layers ?? {}) },
@@ -35,7 +37,7 @@ export default function tenementMap(config = {}) {
                 fitBoundsOptions: { padding: 40, maxZoom: 13 },
                 attributionControl: { compact: true, customAttribution: '© State of WA (DMPE), CC BY 4.0' },
             });
-            addControls(map, maplibregl);
+            addControls(map, maplibregl, this);
 
             // Only a basemap style that never loaded falls back. A tile error (sourceId set) must
             // not: swapping the style then would drop every Pegwatch layer.
@@ -51,8 +53,7 @@ export default function tenementMap(config = {}) {
                 addLayers(map);
                 attachRendering(map, this);
                 const card = attachCard(map, this);
-                cleanups.push(card.destroy);
-                attachControls(map, this);
+                cleanups.push(card.destroy, attachControls(map, this, card, { full }));
                 attachUrlState(map, this);
                 attachDraw(map, this);
                 ready = true;
