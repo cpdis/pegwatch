@@ -4,7 +4,7 @@ A WA map of every live, pending and dead mining tenement, with free email
 alerts when ground near you is applied for, dies, shrinks or is scheduled
 for release.
 
-The repo has two parts:
+The plan is in `docs/plan.md`. The repo has two parts:
 
 - `ingest/`: a Python job, run nightly by GitHub Actions, that pulls the public
   SLIP layers into PostGIS and records every change as a `tenement_events` row.
@@ -43,6 +43,37 @@ After each ingest, `POST /hooks/ingest-complete` (bearer token
 `PEGWATCH_INGEST_TOKEN`) or `php artisan pegwatch:send-alerts` matches the
 run's events to watch areas and sends one digest email per area. The free plan
 has one watch area (a circle up to 50 km) and the death and release alerts.
+
+## Weekly digest
+
+The demand test's email list: `/digest` and a box on the map take an email
+address (no account), confirm it by double opt-in, and send one state-wide
+summary a week: deaths ranked by the ground they left with no other tenement
+over it, the biggest new applications and their applicants, and the
+compulsory releases due in the next seven days. Each issue is stored and has
+a public page at `/digest/{week}`.
+
+The ingest hook builds and sends the issue after the first run on or after
+`PEGWATCH_DIGEST_DAY` (ISO weekday, default 1 = Monday, so Monday about 7pm
+AWST). Sending is resumable: each delivery is recorded, a hook call stops
+after about 40 seconds, and the rest go out on the next call or with
+`php artisan pegwatch:send-digest`. Every email carries a one-click
+`List-Unsubscribe` header (RFC 8058) and an unsubscribe link.
+
+`php artisan pegwatch:demand` prints sign-ups by source. Links with
+`?ref=<tag>` (or `utm_source`) record the tag against the sign-up.
+
+## Pre-sale
+
+`/pro` shows the plans from `docs/plan.md` (Free, Prospector at A$89 a year,
+Team at A$49 a month) and pre-sells Prospector. With `STRIPE_SECRET` and
+`STRIPE_PRESALE_PRICE` (a one-off A$89 price in Stripe) set, "Pre-order" goes
+to Stripe Checkout, and `POST /hooks/stripe` (a Stripe webhook for
+`checkout.session.completed` and `checkout.session.async_payment_succeeded`,
+signed with `STRIPE_WEBHOOK_SECRET`) marks the row paid. Without them, the
+page records a reservation and charges nothing, so demand is still counted.
+Team only records interest. Rows live in `presales`; `pegwatch:demand` counts
+them. `PEGWATCH_PRESALE_PRICE_LABEL` changes the price shown.
 
 ## Deploying (Laravel Cloud)
 
