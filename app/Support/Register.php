@@ -474,7 +474,7 @@ class Register
         return [min($xs), min($ys), max($xs), max($ys)];
     }
 
-    // g-visual: share previews and OG images.
+    // g-visual: share previews, OG images and the data status page.
 
     /**
      * One tenement's facts for a share preview: the live or pending record,
@@ -522,5 +522,30 @@ class Register
              order by h.is_company limit 1',
             [$slug, $slug]
         );
+    }
+
+    /**
+     * The last nightly checks, newest first, each with its layers' extract
+     * times and row counts and the number of change events it found.
+     */
+    public static function recentRuns(int $limit = 30): array
+    {
+        $runs = DB::select(
+            'select r.id, r.started_at, r.finished_at, r.status, r.tenements_extract, r.stale,
+                    (select count(*) from tenement_events e where e.run_id = r.id) as events
+             from ingest_runs r order by r.id desc limit ?',
+            [$limit]
+        );
+        $layers = collect(DB::select(
+            'select run_id, layer_code, layer_key, fetched_rows, max_extract from layer_extracts
+             where run_id = any(?::bigint[]) order by layer_code',
+            ['{'.implode(',', array_map(fn ($r) => (int) $r->id, $runs)).'}']
+        ))->groupBy('run_id');
+
+        return array_map(fn ($r) => (object) [
+            ...(array) $r,
+            'events' => (int) $r->events,
+            'layers' => $layers->get($r->id, collect())->all(),
+        ], $runs);
     }
 }

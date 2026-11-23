@@ -186,7 +186,10 @@ class Format
         return self::localDate($value, $d->format('H:i:s') !== '00:00:00');
     }
 
-    // g-visual: share previews.
+    // g-visual: share previews and the data status page.
+
+    /** The department's list of regional mining registrar offices (checked 23 Nov 2026). */
+    public const MINING_REGISTRAR_URL = 'https://www.wa.gov.au/organisation/department-of-local-government-industry-regulation-and-safety/regional-offices-lgirs-and-dmpe';
 
     /** Death reasons that read as a verb: "withdrawn on 16 Nov 2026". */
     private const DEATH_VERBS = ['Surrendered', 'Expired', 'Withdrawn', 'Forfeited', 'Cancelled', 'Refused', 'Lapsed', 'Terminated'];

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Support\Format;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -41,6 +43,40 @@ class GlobalPagesTest extends TestCase
             ->assertSee('<title>Activity · Pegwatch</title>', false)
             ->assertSee('<meta property="og:site_name" content="Pegwatch" />', false)
             ->assertSeeInOrder(['data-flux-brand', 'Pegwatch</span>'], false);
+    }
+
+    public function test_the_data_page_lists_the_last_30_checks_with_layers_and_changes(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-23 06:00:00', 'UTC'));
+        for ($i = 31; $i >= 1; $i--) {
+            DB::table('ingest_runs')->insert([
+                'status' => 'ok', 'started_at' => "2026-10-$i 21:00:00+00", 'finished_at' => "2026-10-$i 21:05:00+00",
+                'tenements_extract' => '2026-10-01 04:00:00+00', 'stale' => true,
+            ]);
+        }
+        $run = self::seedRegister('2026-11-22 20:11:00+00');
+        DB::table('layer_extracts')->insert([
+            ['run_id' => $run, 'layer_code' => 'DMIRS-003', 'layer_key' => 'tenements', 'fetched_rows' => 30610, 'max_extract' => '2026-11-22 20:11:00+00'],
+            ['run_id' => $run, 'layer_code' => 'DMIRS-030', 'layer_key' => 'release_pending', 'fetched_rows' => 11, 'max_extract' => null],
+        ]);
+        DB::insert("insert into tenement_events (run_id, event_type, tenid, fmt_tenid) values (?, 'application', 'P  1500002', 'P 15/2'), (?, 'grant', 'M  2700518', 'M 27/518')", [$run, $run]);
+
+        $html = $this->get('/data')->assertOk()
+            ->assertSee('The last 30 nightly checks')
+            ->assertSeeInOrder(['Mon 23 Nov,', '6:00am', '23 Nov, 4:11am', '2', 'Checked'])
+            ->assertSee('Live and pending tenements')
+            ->assertSee('30,610 rows')
+            ->assertSee('Release pending (s65 surrender)')
+            ->assertSee('Same extract')
+            ->assertSee('Pegging on the ground.')
+            ->assertSee('Private land.')
+            ->assertSee('Same-day lodgements.')
+            ->assertSee('href="'.Format::TENGRAPH_URL.'"', false)
+            ->assertSee('href="'.Format::MINING_REGISTRAR_URL.'"', false)
+            ->assertSee('CC BY 4.0')
+            ->getContent();
+
+        $this->assertSame(30, substr_count($html, 'data-test="run-row"'));
     }
 
     public function test_a_natural_person_holder_page_has_no_share_image_and_a_company_page_does(): void

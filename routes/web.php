@@ -31,6 +31,9 @@ Route::get('tiles/{layer}/{z}/{x}/{y}.mvt', [TileController::class, 'show'])
 Route::post('hooks/ingest-complete', IngestHookController::class)
     ->withoutMiddleware([PreventRequestForgery::class])->name('hooks.ingest');
 
+// g-visual: the data status page.
+Route::livewire('data', 'pages::data')->name('data');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::redirect('dashboard', '/watch-areas')->name('dashboard');
     Route::livewire('watch-areas', 'pages::watch-areas')->name('watch-areas.index');
