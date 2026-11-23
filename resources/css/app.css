@@ -33,16 +33,26 @@
     --color-zinc-900: #171717;
     --color-zinc-950: #0a0a0a;
 
-    --color-accent: var(--color-neutral-800);
-    --color-accent-content: var(--color-neutral-800);
-    --color-accent-foreground: var(--color-white);
+    /* Near-black UI with one hi-vis accent (survey-tape yellow). Flux buttons use these. */
+    --color-ink: #0b0b0c;
+    --color-accent: #ffd400;
+    --color-accent-content: #0b0b0c;
+    --color-accent-foreground: #0b0b0c;
+
+    /* Status palette: keep in step with App\Support\Format::STATUS_COLOURS. */
+    --color-status-live: #15803d;
+    --color-status-pending: #d97706;
+    --color-status-dead: #71717a;
+    --color-status-release: #c026d3;
+    --color-status-restricted: #a16207;
 }
 
 @layer theme {
     .dark {
-        --color-accent: var(--color-white);
-        --color-accent-content: var(--color-white);
-        --color-accent-foreground: var(--color-neutral-800);
+        /* The accent stays hi-vis in dark mode; accent text turns yellow on the dark surface. */
+        --color-accent: #ffd400;
+        --color-accent-content: #ffd400;
+        --color-accent-foreground: #0b0b0c;
     }
 }
 

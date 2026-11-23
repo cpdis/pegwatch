@@ -36,6 +36,21 @@ class Register
         );
     }
 
+    /** When the nightly job last finished, whatever it found (null before the first run). */
+    public static function lastCheck(): ?string
+    {
+        return DB::scalar('select max(finished_at) from ingest_runs');
+    }
+
+    /**
+     * The earliest death on record. Until the full DEAD layer is loaded this is
+     * recent (the nightly pull keeps 30 days), so labels must not claim 12 months.
+     */
+    public static function deadHistoryStart(): ?string
+    {
+        return DB::scalar('select min(ended_at) from dead_tenements');
+    }
+
     public static function totals(): array
     {
         $rows = DB::select('select status, count(*) as n from tenements group by status');

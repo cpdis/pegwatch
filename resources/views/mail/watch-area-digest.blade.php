@@ -20,7 +20,7 @@ You get this email because of your watch area "{{ $area->name }}". To stop these
 [delete the watch area]({{ route('watch-areas.index') }}).
 
 This is a screening aid, not advice that ground can be applied for. Confirm every tenement in
-TENGRAPH and with the Mining Registrar before you act.
+[TENGRAPH]({{ \App\Support\Format::TENGRAPH_URL }}) and with the Mining Registrar before you act.
 
 Data © State of Western Australia (Department of Mines, Petroleum and Exploration), CC BY 4.0, changes made.
 </x-mail::message>

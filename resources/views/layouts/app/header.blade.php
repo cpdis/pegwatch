@@ -90,7 +90,7 @@
                 Register as of the department's extract of {{ \App\Support\Format::awst($run->tenements_extract) }} AWST{{ $run->stale ? ' (not refreshed since the previous night)' : '' }}.
             @endif
             A screening aid, not advice that ground can be applied for: confirm in
-            <a class="underline" href="https://dmpe.wa.gov.au/geoscience/tengraph" target="_blank" rel="noreferrer">TENGRAPH</a>
+            <a class="underline" href="{{ \App\Support\Format::TENGRAPH_URL }}" target="_blank" rel="noreferrer">TENGRAPH</a>
             and with the Mining Registrar. Data © State of Western Australia (Department of Mines, Petroleum and Exploration), CC BY 4.0, changes made.
         </footer>
 
