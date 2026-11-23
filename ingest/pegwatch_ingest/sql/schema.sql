@@ -1,6 +1,18 @@
 -- Pegwatch ingest schema. Idempotent: safe to run before every ingest.
 create extension if not exists postgis;
 
+-- CREATE INDEX IF NOT EXISTS takes a SHARE lock on the table before it finds
+-- the index, so a re-run queues behind any open writer (a deploy's migration
+-- during the nightly snapshot) and blocks that table's writes meanwhile. Check
+-- the catalogue first, like the ALTER guard below.
+create or replace function pw_ensure_index(name text, definition text) returns void
+language plpgsql as $$
+begin
+  if to_regclass(name) is null then
+    execute format('create index %I on %s', name, definition);
+  end if;
+end $$;
+
 -- Dates in the SLIP layers are local (AWST) calendar dates encoded as
 -- midnight-UTC epoch milliseconds, with times in separate HH:MM:SS strings.
 create or replace function pw_date(ms jsonb) returns date
@@ -37,6 +49,21 @@ create or replace function pw_is_company(name text) returns boolean
 language sql immutable as $$
   select name ~* '(\mPTY\M|\mLTD\M|\mLIMITED\M|\mCORP\M|\mINC\M|\mN\.?L\.?$|\mCOMPANY\M|\mTRUST\M|\mHOLDINGS\M|\mMINING\M|\mRESOURCES\M|\mMINERALS\M|\mGROUP\M|\mPARTNERSHIP\M|\mSHIRE\M|\mCOUNCIL\M|\mSTATE OF\M|\mMINISTER\M|\mCOMMISSION\M|\mAUTHORITY\M|\mCORPORATION\M|\mBHP\M|\mFORTESCUE\M|\mCOOPERATIVE\M|\mASSOCIATION\M|\mINCORPORATED\M)'
 $$;
+
+-- Special prospecting licences for gold may sit on someone else's ground. The
+-- live layer flags them in special_in; their IDs end in S ("P 27/2688-S").
+create or replace function pw_special_prospecting(type_code text, special_ind text, fmt_tenid text)
+returns boolean language sql immutable as $$
+  select coalesce(type_code = 'P' and (trim(special_ind) = 'S' or fmt_tenid ~ '[0-9]-?S$'), false)
+$$;
+
+-- Whether a tenement closes its ground to others. Miscellaneous licences,
+-- general purpose leases and special prospecting licences may overlap other tenure.
+create or replace function pw_blocks_ground(type_code text, special_ind text, fmt_tenid text)
+returns boolean language sql immutable as $$
+  select type_code not in ('L', 'G') and not pw_special_prospecting(type_code, special_ind, fmt_tenid)
+$$;
+drop function if exists pw_blocks_ground(text);
 
 create table if not exists ingest_runs (
   id            bigserial primary key,
@@ -80,7 +107,7 @@ create table if not exists tenements (
   area_ha      double precision,
   geom         geometry(MultiPolygon, 4326)
 );
-create index if not exists tenements_geom_idx on tenements using gist (geom);
+select pw_ensure_index('tenements_geom_idx', 'tenements using gist (geom)');
 
 create table if not exists tenements_prev (like tenements including all);
 
@@ -117,8 +144,10 @@ begin
     alter table dead_tenements add column holders_are_company boolean[] not null default '{}';
   end if;
 end $$;
-create index if not exists dead_tenements_geom_idx on dead_tenements using gist (geom);
-create index if not exists dead_tenements_tenid_idx on dead_tenements (tenid);
+select pw_ensure_index('dead_tenements_geom_idx', 'dead_tenements using gist (geom)');
+select pw_ensure_index('dead_tenements_tenid_idx', 'dead_tenements (tenid)');
+-- Dead-history start (min(ended_at)), recent deaths and the freed-ground window.
+select pw_ensure_index('dead_tenements_ended_idx', 'dead_tenements (ended_at)');
 
 create table if not exists release_pending (
   tenid text not null, rlesid text not null, fmt_tenid text, ten_type text,
@@ -153,7 +182,7 @@ create table if not exists land_restrictions (
   props    jsonb,
   geom     geometry(MultiPolygon, 4326)
 );
-create index if not exists land_restrictions_geom_idx on land_restrictions using gist (geom);
+select pw_ensure_index('land_restrictions_geom_idx', 'land_restrictions using gist (geom)');
 
 create table if not exists tenement_events (
   id           bigserial primary key,
@@ -171,6 +200,66 @@ create table if not exists tenement_events (
   geom         geometry(MultiPolygon, 4326),
   created_at   timestamptz not null default now()
 );
-create index if not exists tenement_events_run_idx on tenement_events (run_id);
-create index if not exists tenement_events_type_idx on tenement_events (event_type, created_at);
-create index if not exists tenement_events_geom_idx on tenement_events using gist (geom);
+select pw_ensure_index('tenement_events_run_idx', 'tenement_events (run_id)');
+select pw_ensure_index('tenement_events_type_idx', 'tenement_events (event_type, created_at)');
+select pw_ensure_index('tenement_events_geom_idx', 'tenement_events using gist (geom)');
+
+-- Tables the map and its cards read, refilled from each snapshot inside its
+-- transaction (sql/<table>.sql) with DELETE and INSERT, so readers keep last
+-- night's rows until the commit.
+
+-- State view below zoom 8: current blocking ground by status and type group.
+create table if not exists coverage_lowzoom (
+  status     text not null,          -- LIVE | PENDING
+  type_group text not null,          -- E | P | M | other
+  geom       geometry(MultiPolygon, 4326) not null
+);
+select pw_ensure_index('coverage_lowzoom_geom_idx', 'coverage_lowzoom using gist (geom)');
+
+-- Ground that tenements dead in the last 90 days left with no blocking tenement over it.
+create table if not exists freed_ground (
+  tenid        text not null,
+  fmt_tenid    text,
+  ended_at     timestamp,           -- AWST wall clock
+  reason       text,                -- null until the DEAD layer publishes the death
+  holder       text,                -- first holder, by name only
+  uncovered_ha double precision not null,
+  geom         geometry(MultiPolygon, 4326) not null
+);
+select pw_ensure_index('freed_ground_geom_idx', 'freed_ground using gist (geom)');
+
+-- WA land with no blocking tenement over it and not closed to mining.
+create table if not exists no_recorded_tenement (geom geometry(MultiPolygon, 4326) not null);
+select pw_ensure_index('no_recorded_tenement_geom_idx', 'no_recorded_tenement using gist (geom)');
+
+-- The hover card's "Changed 2 days ago: holder change".
+create table if not exists recent_changes (
+  tenid       text primary key,
+  event_type  text not null,
+  detected_at timestamptz not null   -- when the run that found it started
+);
+
+-- Reference layers from the ABS boundaries (boundaries.py), refreshed weekly.
+
+-- WA land (ABS STE 2021), cut into pieces so the nightly difference stays local.
+create table if not exists wa_land (geom geometry(MultiPolygon, 4326) not null);
+select pw_ensure_index('wa_land_geom_idx', 'wa_land using gist (geom)');
+
+-- WA towns (ABS UCL 2021) and localities (ABS SAL 2021) for place search.
+create table if not exists places (
+  id   serial primary key,
+  name text not null,
+  kind text not null,                -- town | locality
+  lga  text,                         -- local government area, e.g. Kalgoorlie-Boulder
+  geom geometry(Point, 4326) not null
+);
+select pw_ensure_index('places_name_prefix_idx', 'places (lower(name) text_pattern_ops)');
+select pw_ensure_index('places_geom_idx', 'places using gist (geom)');
+-- pg_trgm ships with Postgres but may be missing; search then runs unindexed.
+do $$
+begin
+  if exists (select 1 from pg_available_extensions where name = 'pg_trgm') then
+    create extension if not exists pg_trgm;
+    perform pw_ensure_index('places_name_trgm_idx', 'places using gin (name gin_trgm_ops)');
+  end if;
+end $$;

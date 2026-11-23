@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\RequirePasswordIfSet;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {
@@ -12,8 +13,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('settings/appearance', 'pages::settings.appearance')->name('appearance.edit');
 
     Route::livewire('settings/security', 'pages::settings.security')
-        ->middleware([
-            'password.confirm',
-        ])
+        // Accounts without a password (emailed-link sign-in) have nothing to confirm.
+        ->middleware([RequirePasswordIfSet::class])
         ->name('security.edit');
 });

@@ -15,6 +15,23 @@ class Format
 
     public const OTHER_COLOUR = '#0f766e';
 
+    /** What "uncovered" leaves out, as pw_blocks_ground does: said wherever uncovered ground is. */
+    public const UNCOUNTED = 'not counting miscellaneous licences, general purpose leases or special prospecting licences';
+
+    /** The department's TENGRAPH page, the place users must confirm anything Pegwatch shows. */
+    public const TENGRAPH_URL = 'https://www.wa.gov.au/service/natural-resources/mineral-resources/access-tengraph-web';
+
+    /** One status palette for badges, dots and the map. No tenement type colour reuses these. */
+    public const STATUS_COLOURS = [
+        'live' => '#15803d', 'pending' => '#d97706', 'dead' => '#71717a',
+        'release' => '#c026d3', 'restricted' => '#a16207',
+    ];
+
+    public const STATUS_LABELS = [
+        'live' => 'Live', 'pending' => 'Pending', 'dead' => 'Dead',
+        'release' => 'Release due', 'restricted' => 'Restricted',
+    ];
+
     public const TYPE_NAMES = [
         'E' => 'Exploration licence', 'P' => 'Prospecting licence', 'M' => 'Mining lease',
         'L' => 'Miscellaneous licence', 'G' => 'General purpose lease', 'R' => 'Retention licence',
@@ -23,8 +40,8 @@ class Format
     public const EVENT_COLOURS = [
         'application' => '#2563eb', 'appeared' => '#2563eb', 'reappeared' => '#2563eb',
         'death' => '#111827', 'grant' => '#16a34a', 'holder_change' => '#9333ea',
-        'shrink' => '#ea580c', 'grow' => '#0891b2', 'release_scheduled' => '#dc2626',
-        'released' => '#dc2626', 'release_cancelled' => '#6b7280', 'status_change' => '#6b7280',
+        'shrink' => '#ea580c', 'grow' => '#0891b2', 'release_scheduled' => '#c026d3',
+        'released' => '#c026d3', 'release_cancelled' => '#6b7280', 'status_change' => '#6b7280',
     ];
 
     /** Register timestamps are AWST wall-clock values stored without a zone. */
@@ -83,5 +100,120 @@ class Format
     public static function lower(?string $v): string
     {
         return $v === null ? '' : strtolower($v);
+    }
+
+    /** Register words (types, statuses, survey states) in sentence case. Never use it on holder names. */
+    public static function sentence(?string $v): string
+    {
+        $v = trim((string) $v);
+
+        return $v === '' ? '' : ucfirst(strtolower($v));
+    }
+
+    /** A status key for badges and colours from a register status ("LIVE") or a key ("release"). */
+    public static function statusKey(?string $status): string
+    {
+        $k = strtolower(trim((string) $status));
+
+        return array_key_exists($k, self::STATUS_COLOURS) ? $k : 'dead';
+    }
+
+    /**
+     * How long ago or how far ahead a register date is, from today in Perth:
+     * "3 years 7 months ago", "in 4 years", "5 days ago", "today".
+     * Register values are AWST wall-clock times, so both sides are compared in Perth.
+     */
+    public static function relative(?string $value, ?CarbonImmutable $now = null): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        try {
+            $then = CarbonImmutable::parse($value, 'Australia/Perth');
+        } catch (Throwable) {
+            return '';
+        }
+        if ($then->year >= 2999) {
+            return '';
+        }
+        $now ??= CarbonImmutable::now('Australia/Perth');
+        $past = $then->lessThanOrEqualTo($now);
+        [$from, $to] = $past ? [$then, $now] : [$now, $then];
+        $months = (int) floor($from->diffInMonths($to));
+        if ($months === 0) {
+            $days = (int) floor($from->startOfDay()->diffInDays($to->startOfDay()));
+
+            return match (true) {
+                $days === 0 => 'today',
+                $days === 1 => $past ? 'yesterday' : 'tomorrow',
+                default => $past ? "$days days ago" : "in $days days",
+            };
+        }
+        $years = intdiv($months, 12);
+        $rest = $months % 12;
+        $plural = fn (int $n, string $unit) => $n.' '.$unit.($n === 1 ? '' : 's');
+        $span = $years > 0
+            ? $plural($years, 'year').($rest > 0 ? ' '.$plural($rest, 'month') : '')
+            : $plural($rest, 'month');
+
+        return $past ? "$span ago" : "in $span";
+    }
+
+    /** The two-digit mineral field number in a tenement ID ("E 24/250" is 24), or null. */
+    public static function fieldNumber(?string $fmtTenid): ?string
+    {
+        return preg_match('~^\s*[A-Z]{1,2}\s*(\d{2})\s*/~i', (string) $fmtTenid, $m) ? $m[1] : null;
+    }
+
+    /** Where a tenement is, from its ID: the mineral district if named, else the field ("Kanowna", "Broad Arrow"). */
+    public static function field(?string $fmtTenid): ?string
+    {
+        $n = self::fieldNumber($fmtTenid);
+        $row = $n === null ? null : config('mineral_fields.'.$n);
+
+        return $row ? ($row['district'] ?? $row['field']) : null;
+    }
+
+    /** A register value with its time, or the date alone when the register holds no time (midnight). */
+    public static function when(?string $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        try {
+            $d = CarbonImmutable::parse($value);
+        } catch (Throwable) {
+            return $value;
+        }
+
+        return self::localDate($value, $d->format('H:i:s') !== '00:00:00');
+    }
+
+    // g-visual: share previews and the data status page.
+
+    /** The department's list of regional mining registrar offices (checked 23 Nov 2026). */
+    public const MINING_REGISTRAR_URL = 'https://www.wa.gov.au/organisation/department-of-local-government-industry-regulation-and-safety/regional-offices-lgirs-and-dmpe';
+
+    // b-interact (map interaction)
+
+    /**
+     * What the map script needs from the server, sent once per page in a meta tag:
+     * the TENGRAPH link, the status palette, each mineral field's display name by
+     * number (so the hover card can say "Kanowna" without a request), and the
+     * satellite layer when one is configured.
+     */
+    public static function mapConfig(): array
+    {
+        $satellite = config('pegwatch.satellite');
+
+        return [
+            'tengraph' => self::TENGRAPH_URL,
+            'status' => self::STATUS_COLOURS,
+            'fields' => array_map(fn (array $f) => $f['district'] ?? $f['field'], config('mineral_fields')),
+            'satellite' => filled($satellite['url'] ?? null) ? [
+                'url' => $satellite['url'],
+                'attribution' => (string) ($satellite['attribution'] ?? ''),
+            ] : null,
+        ];
     }
 }

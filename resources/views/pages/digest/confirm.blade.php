@@ -37,7 +37,14 @@ new #[Title('Confirm the weekly digest')] class extends Component {
         <flux:callout class="mt-4" icon="check-circle" variant="success" :heading="__('You\'re subscribed')">
             <flux:callout.text>{{ __('The next issue arrives after Monday night\'s update. Every issue has an unsubscribe link.') }}</flux:callout.text>
         </flux:callout>
-        <flux:button class="mt-4" :href="route('home')" wire:navigate>{{ __('Open the map') }}</flux:button>
+        <flux:card class="mt-6">
+            <flux:heading>{{ __('Next: one area, the night it changes') }}</flux:heading>
+            <flux:text class="mt-1">{{ __('The digest covers all of WA once a week. A watch area emails you the changes in one area the morning after the register shows them.') }}</flux:text>
+            <div class="mt-4 flex flex-wrap gap-2">
+                <flux:button variant="primary" icon="map-pin" :href="Route::has('watch.start') ? route('watch.start') : route('register')" wire:navigate>{{ __('Set up a free watch area') }}</flux:button>
+                <flux:button variant="ghost" :href="route('home')" wire:navigate>{{ __('Open the map') }}</flux:button>
+            </div>
+        </flux:card>
     @else
         <flux:text class="mt-2">{{ __('Press the button to start one email a week about changes on the WA tenement register.') }}</flux:text>
         <flux:button class="mt-4" variant="primary" wire:click="confirm">{{ __('Confirm my subscription') }}</flux:button>

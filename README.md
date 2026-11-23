@@ -121,7 +121,7 @@ row per change:
 | --- | --- |
 | `application` | new tenid with status PENDING |
 | `appeared` | new tenid already LIVE (e.g. a restoration) |
-| `death` | tenid gone from the live layer; reason from the DEAD layer (back-filled if it lags), `kind` = ended / converted / amalgamated, `uncovered_share` = share of the area with no other blocking live or pending tenement over it, `covered_any_share` counting every tenement |
+| `death` | tenid gone from the live layer; reason from the DEAD layer (back-filled if it lags), `kind` = ended / converted / amalgamated, `uncovered_share` = share of the area with no other blocking live or pending tenement over it (miscellaneous licences, general purpose leases and special prospecting licences do not block), `covered_any_share` counting every tenement |
 | `grant` / `status_change` | PENDING → LIVE, or any other status move |
 | `holder_change` | holder set changed (transfer, addition, removal) |
 | `shrink` / `grow` | geometry lost or gained at least 0.5 ha and 0.1% (partial surrender) |
@@ -148,6 +148,30 @@ whose schema already exists.
 
 The snapshot empties the tables the app reads with `DELETE`, not `TRUNCATE`, so pages
 keep serving last night's data until the run commits instead of waiting on its lock.
+Re-running `schema.sql` takes no table locks either: indexes are created through
+`pw_ensure_index()`, which checks the catalogue first.
+
+After the diff, in the same transaction, the run refills the tables the map and its
+cards read (`sql/<table>.sql`). Each runs under a savepoint: one that fails keeps last
+night's rows and the run goes on. The report lists rows and seconds for each.
+
+| Table | Holds | Seed copy |
+| --- | --- | --- |
+| `coverage_lowzoom` | Blocking ground by status and type group (E, P, M, other), snapped, simplified to 50 m, subdivided: the map below zoom 8 | 7,210 rows, 5 to 8 s |
+| `freed_ground` | For tenements dead in the last 90 days that closed their ground, the part no blocking tenement covers now, from 0.5 ha | 205 rows, 0.4 s |
+| `no_recorded_tenement` | WA land with no blocking tenement over it, less s19 land (s57 areas and File Notation Areas stay in: they do not close ground to all tenure) | 31,530 rows, 10 to 11 s |
+| `recent_changes` | Each tenement's latest event in the last 30 days, not counting reversed deaths | 282 rows, under 0.1 s |
+
+"Blocking" leaves out miscellaneous licences, general purpose leases and special
+prospecting licences (`pw_blocks_ground()`), which may sit on other tenure.
+
+`places` (WA towns and localities, for search) and `wa_land` come from the ABS
+Australian Statistical Geography Standard, Edition 3, CC BY 4.0: SAL 2021 localities,
+UCL 2021 urban centres (towns), LGA 2025 and STE 2021, downloaded from abs.gov.au
+(about 200 MB) weekly or when a table is empty; `--refresh-boundaries` forces it.
+Landgate's SLIP localities and coastline are not used: they are under Landgate's
+Personal Use Licence. Attribution: "Source: Australian Bureau of Statistics, ASGS
+Edition 3, CC BY 4.0."
 
 Timestamps: SLIP encodes AWST wall-clock times as if they were UTC. The live
 layer's extract is stamped about 4am AWST and holds lodgements to the end of the

@@ -2,8 +2,8 @@
 # Confirm your subscription
 
 Someone, hopefully you, asked for the Pegwatch weekly digest at this address: one email a
-week with the WA tenements that died and left open ground, the biggest new applications,
-and the compulsory releases coming up.
+week with the WA tenements that ended leaving ground no other tenement covers, the biggest
+new applications, and the compulsory releases coming up.
 
 <x-mail::button :url="$confirmUrl">
 Confirm

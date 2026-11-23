@@ -129,7 +129,11 @@ class DigestTest extends TestCase
         $this->assertSame(2, $c['counts']['application']);
         $this->assertSame(['E 15/21', 'E 15/20'], array_column($c['applications'], 'fmt_tenid'));
         $this->assertSame([['name' => 'SMITH, JOHN', 'slug' => 'smith-john', 'n' => 2]], $c['applicants']);
-        $this->assertSame(['E 15/30'], array_column($c['releases'], 'fmt_tenid'));
+        // Every upcoming release, not only the next 7 days (G19).
+        $this->assertSame(['E 15/30', 'E 15/31'], array_column($c['releases'], 'fmt_tenid'));
+        $this->assertFalse($c['stale']);
+        $this->assertSame(['kind' => 'application', 'fmt_tenid' => 'E 15/21'],
+            ['kind' => WeeklyDigest::lead($c)['kind'], 'fmt_tenid' => WeeklyDigest::lead($c)['item']['fmt_tenid']]);
     }
 
     public function test_digest_goes_out_once_a_week_to_confirmed_subscribers_only(): void
@@ -155,7 +159,7 @@ class DigestTest extends TestCase
             $headers = $m->headers()->text;
 
             return $m->hasTo('on@example.com')
-                && str_contains($m->envelope()->subject, '2 tenements left open ground')
+                && str_contains($m->envelope()->subject, '2 tenements freed ground')
                 && $headers['List-Unsubscribe-Post'] === 'List-Unsubscribe=One-Click'
                 && str_contains($headers['List-Unsubscribe'], $on->token);
         });
@@ -196,9 +200,14 @@ class DigestTest extends TestCase
         self::seedWeek($monday);
         app(WeeklyDigest::class)->build($monday);
 
-        $this->get('/digest')->assertOk()->assertSee('Week to 30 Nov 2026')->assertSee('2 tenements left open ground');
+        $this->get('/digest')->assertOk()->assertSee('Week to 30 Nov 2026')->assertSee('2 tenements freed ground')
+            ->assertDontSee('What an issue looks like');
+        // The biggest item leads; hectares sit in their own right-aligned column; holders link.
         $this->get('/digest/2026-W49')->assertOk()
-            ->assertSeeInOrder(['New application', 'Granted', 'Tenement recorded dead', 'Ground left open', 'E 15/11', '900.0 ha', 'E 15/10', 'Biggest new applications', 'E 15/21', 'SMITH, JOHN', 'E 15/30']);
+            ->assertSeeInOrder(['The week\'s biggest change', 'E 15/21', '5,000.0 ha', 'Freed ground', 'E 15/11', '900.0 ha', 'E 15/10',
+                'Biggest new applications', 'E 15/21', 'SMITH, JOHN', 'Upcoming compulsory releases', 'E 15/30', 'E 15/31'])
+            ->assertSee(route('holders.show', ['slug' => 'smith-john']), false)
+            ->assertSee('text-end', false);
         $this->get('/digest/2026-W01')->assertNotFound();
 
         $s = DigestSubscriber::create(['email' => 'on@example.com']);
@@ -206,6 +215,9 @@ class DigestTest extends TestCase
         $html = (new WeeklyDigestMail($issue->week, json_decode($issue->content, true), $s))->render();
         $this->assertStringContainsString('E 15/11', $html);
         $this->assertStringContainsString($s->unsubscribeUrl(), $html);
+        // Every heading renders, including those straight after a table.
+        $this->assertStringNotContainsString('## ', $html);
+        $this->assertStringContainsString('Upcoming compulsory releases', $html);
     }
 
     public function test_ingest_hook_sends_the_digest_when_due(): void
@@ -223,6 +235,57 @@ class DigestTest extends TestCase
 
     public function test_map_shows_the_signup_to_guests(): void
     {
-        $this->get('/')->assertOk()->assertSee('The week on the WA register, every Monday');
+        self::seedWeek(CarbonImmutable::now());
+        $this->get('/')->assertOk()->assertSee('Get the week&#039;s changes every Monday', false);
+    }
+
+    public function test_digest_page_shows_a_sample_before_the_first_issue(): void
+    {
+        $now = CarbonImmutable::now('Australia/Perth');
+        self::seedWeek($now);
+        // Known only from the register's dates: no diff event behind it.
+        DB::insert(
+            "insert into dead_tenements (tenid, ended_at, fmt_tenid, type, death_reason, geom)
+             values ('E  1500040', ?, 'E 15/40', 'EXPLORATION LICENCE', 'Surrendered', ?::geometry)",
+            [$now->subDays(2)->format('Y-m-d 00:00:00'), self::square(123.0, -30.8, 0.05)]
+        );
+
+        $c = app(WeeklyDigest::class)->sample();
+        $this->assertTrue($c['sample']);
+        $this->assertSame('E 15/40', $c['freed'][0]['fmt_tenid']);
+        $this->assertSame('Surrendered', $c['freed'][0]['reason']);
+        $this->assertSame(['E 15/30', 'E 15/31'], array_column($c['releases'], 'fmt_tenid'));
+
+        $this->get('/digest')->assertOk()
+            ->assertSeeInOrder(['What an issue looks like', 'Sample', 'Freed ground', 'E 15/40', 'Upcoming compulsory releases', 'E 15/31', 'Past issues', 'None yet']);
+        $this->assertSame(0, DB::table('digest_issues')->count());
+    }
+
+    public function test_a_stale_week_sends_a_short_notice(): void
+    {
+        $monday = CarbonImmutable::parse('2026-11-30 19:30', 'Australia/Perth');
+        $extract = $monday->subDays(10)->utc();
+        DB::table('ingest_runs')->insert(['status' => 'ok', 'finished_at' => $extract, 'tenements_extract' => $extract, 'stale' => false]);
+        DB::table('ingest_runs')->insert(['status' => 'ok', 'finished_at' => $monday->subDay()->utc(), 'tenements_extract' => $extract, 'stale' => true]);
+        app(WeeklyDigest::class)->build($monday);
+
+        $issue = DB::table('digest_issues')->first();
+        $c = json_decode($issue->content, true);
+        $this->assertTrue($c['stale']);
+        $this->get('/digest/'.$issue->week)->assertOk()->assertSee('No new extract this week')
+            ->assertSee('20 Nov 2026')->assertDontSee('Biggest new applications');
+
+        $mail = new WeeklyDigestMail($issue->week, $c, DigestSubscriber::create(['email' => 'on@example.com']));
+        $this->assertStringContainsString('no new register extract', $mail->envelope()->subject);
+        $html = $mail->render();
+        $this->assertStringContainsString('No new extract this week', $html);
+        $this->assertStringNotContainsString('Biggest new applications', $html);
+    }
+
+    public function test_confirming_offers_a_watch_area(): void
+    {
+        $s = DigestSubscriber::create(['email' => 'jane@example.com']);
+        Livewire::test('pages::digest.confirm', ['token' => $s->token])->call('confirm')
+            ->assertSee('Set up a free watch area');
     }
 }

@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import '../../vendor/livewire/flux/dist/flux.css';
+@import './map.css';
 
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
@@ -33,16 +34,26 @@
     --color-zinc-900: #171717;
     --color-zinc-950: #0a0a0a;
 
-    --color-accent: var(--color-neutral-800);
-    --color-accent-content: var(--color-neutral-800);
-    --color-accent-foreground: var(--color-white);
+    /* Near-black UI with one hi-vis accent (survey-tape yellow). Flux buttons use these. */
+    --color-ink: #0b0b0c;
+    --color-accent: #ffd400;
+    --color-accent-content: #0b0b0c;
+    --color-accent-foreground: #0b0b0c;
+
+    /* Status palette: keep in step with App\Support\Format::STATUS_COLOURS. */
+    --color-status-live: #15803d;
+    --color-status-pending: #d97706;
+    --color-status-dead: #71717a;
+    --color-status-release: #c026d3;
+    --color-status-restricted: #a16207;
 }
 
 @layer theme {
     .dark {
-        --color-accent: var(--color-white);
-        --color-accent-content: var(--color-white);
-        --color-accent-foreground: var(--color-neutral-800);
+        /* The accent stays hi-vis in dark mode; accent text turns yellow on the dark surface. */
+        --color-accent: #ffd400;
+        --color-accent-content: #ffd400;
+        --color-accent-foreground: #0b0b0c;
     }
 }
 
@@ -86,4 +97,51 @@ button,
 label,
 [role='button'] {
     touch-action: manipulation;
+}
+
+/*
+ * g-visual: the type scale. Flux headings get heavier and tighter as they
+ * grow, numbers in tables line up, and small-caps labels share one style
+ * (the `eyebrow` utility, used by <x-eyebrow>). The doubled attribute
+ * outranks Flux's own font-medium; a page can still override with `!`.
+ */
+[data-flux-heading][data-flux-heading] {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+[data-flux-heading][data-flux-heading].text-2xl {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+
+[data-flux-heading][data-flux-heading].text-4xl {
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+}
+
+h1,
+h2 {
+    text-wrap: balance;
+}
+
+@layer base {
+    table {
+        font-variant-numeric: tabular-nums;
+    }
+}
+
+@utility eyebrow {
+    font-size: 11px;
+    line-height: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-zinc-500);
+
+    &:where(.dark, .dark *) {
+        color: var(--color-zinc-400);
+    }
 }

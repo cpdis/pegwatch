@@ -7,9 +7,12 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 
-from . import db, notices, report
+import psycopg
+
+from . import boundaries, db, notices, report
 from .layers import DEAD, NIGHTLY, TENEMENTS, Layer
 from .slip import SlipClient
 
@@ -17,6 +20,10 @@ log = logging.getLogger("pegwatch_ingest")
 
 # Abort rather than record mass "deaths" if the live layer comes back short.
 MIN_ROW_RATIO = 0.95
+
+# Tables the map and its cards read, refilled from tonight's snapshot in this
+# order, each by sql/<table>.sql inside the snapshot transaction.
+MAP_TABLES = ("coverage_lowzoom", "freed_ground", "no_recorded_tenement", "recent_changes")
 
 
 class IngestAborted(RuntimeError):
@@ -54,9 +61,45 @@ def fetch_layer(conn, client: SlipClient, run_id: int, layer: Layer, where: str)
     return fetched
 
 
+def build_map_tables(conn, run_id: int) -> dict:
+    """Refill each map table under a savepoint, so one that fails keeps last
+    night's rows and the snapshot, diff and alerts still go ahead."""
+    out = {}
+    for table in MAP_TABLES:
+        start = time.monotonic()
+        conn.execute("savepoint map_table")
+        try:
+            db.run_script(conn, f"{table}.sql", run_id)
+        except psycopg.Error as exc:
+            conn.execute("rollback to savepoint map_table")
+            log.warning("%s not rebuilt, keeping the previous rows: %s", table, exc)
+            out[table] = {"error": str(exc).strip()}
+            continue
+        conn.execute("release savepoint map_table")
+        out[table] = {"rows": db.scalar(conn, f"select count(*) from {table}"),
+                      "seconds": round(time.monotonic() - start, 1)}
+        log.info("%s: %d rows in %.1fs", table, out[table]["rows"], out[table]["seconds"])
+    return out
+
+
+def refresh_boundaries(conn, run_id: int) -> None:
+    """Reload WA land and places from the ABS. A failure keeps the old rows."""
+    try:
+        got = boundaries.refresh(conn, run_id)
+    except Exception as exc:  # reference data must never fail the ingest
+        conn.rollback()
+        log.warning("ABS boundaries not refreshed: %s", exc)
+        got = {"error": str(exc)}
+    with conn.cursor() as cur:
+        cur.execute("update ingest_runs set notes = notes || jsonb_build_object('boundaries', %s::jsonb)"
+                    " where id = %s", (json.dumps(got), run_id))
+    conn.commit()
+
+
 def run(dsn: str, dead_days: int | None, full_dead: bool, skip_fetch: bool,
         report_dir: Path | None, client: SlipClient | None = None,
-        min_row_ratio: float = MIN_ROW_RATIO, check_notices: bool = True) -> dict:
+        min_row_ratio: float = MIN_ROW_RATIO, check_notices: bool = True,
+        force_boundaries: bool = False) -> dict:
     client = client or SlipClient()
     conn = db.connect(dsn)
     db.apply_schema(conn)
@@ -65,6 +108,9 @@ def run(dsn: str, dead_days: int | None, full_dead: bool, skip_fetch: bool,
                                    "where status in ('ok', 'baseline') order by id desc limit 1")
     run_id = db.scalar(conn, "insert into ingest_runs default values returning id")
     conn.commit()
+    # Before the snapshot, so tonight's "no recorded tenement" layer has the land.
+    if force_boundaries or (not skip_fetch and boundaries.due(conn)):
+        refresh_boundaries(conn, run_id)
 
     try:
         existing = db.scalar(conn, "select count(*) from tenements")
@@ -97,12 +143,14 @@ def run(dsn: str, dead_days: int | None, full_dead: bool, skip_fetch: bool,
         baseline = not existing
         if not baseline:
             db.run_script(conn, "diff.sql", run_id)
+        map_tables = build_map_tables(conn, run_id)
         status = "baseline" if baseline else "ok"
         with conn.cursor() as cur:
             cur.execute(
                 "update ingest_runs set finished_at = now(), status = %s, tenements_extract = %s,"
-                " previous_extract = %s, stale = %s where id = %s",
-                (status, extract, prev_extract, stale, run_id))
+                " previous_extract = %s, stale = %s,"
+                " notes = notes || jsonb_build_object('map_tables', %s::jsonb) where id = %s",
+                (status, extract, prev_extract, stale, json.dumps(map_tables), run_id))
         conn.commit()
     except Exception as exc:
         conn.rollback()
@@ -146,13 +194,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--min-row-ratio", type=float, default=MIN_ROW_RATIO,
                    help="abort if the live layer returns fewer rows than this share of last run")
     p.add_argument("--no-notices", action="store_true", help="skip the Mining Notices RSS cross-check")
+    p.add_argument("--refresh-boundaries", action="store_true",
+                   help="reload WA land and places from the ABS now (otherwise weekly; works with --skip-fetch)")
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:
         summary = run(args.dsn, args.dead_days, args.full_dead, args.skip_fetch, args.report_dir,
-                      min_row_ratio=args.min_row_ratio, check_notices=not args.no_notices)
+                      min_row_ratio=args.min_row_ratio, check_notices=not args.no_notices,
+                      force_boundaries=args.refresh_boundaries)
     except IngestAborted as exc:
         log.error("ingest aborted: %s", exc)
         return 2

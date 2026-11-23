@@ -51,9 +51,10 @@ class PegwatchTest extends TestCase
         self::seedRegister();
 
         $this->get('/')->assertOk()
-            ->assertSee('1 live and 1 pending')
+            ->assertSeeText('2 tenements in view')
+            ->assertSeeInOrder(['Live', '1', 'Pending', '1'])
             ->assertSee('P 15/9')
-            ->assertSee('Surrendered. 97% of its area has no other tenement over it.');
+            ->assertSee('Surrendered. 97% of its area has no other live or pending tenement over it, L, G and special prospecting licences aside.');
     }
 
     public function test_tenement_page_shows_holders_and_overlaps(): void
@@ -61,7 +62,7 @@ class PegwatchTest extends TestCase
         self::seedRegister();
 
         $this->get('/tenements/e-15-1')->assertOk()
-            ->assertSeeInOrder(['E 15/1', 'ACME GOLD PTY LTD', 'Overlapping (1)', 'P 15/2']);
+            ->assertSeeInOrder(['E 15/1', 'ACME GOLD PTY LTD', 'Overlapping tenements', '(1)', 'P 15/2']);
         $this->get('/tenements/nope-1')->assertNotFound();
 
         $this->get('/tenements/e-99-999')->assertNotFound();
@@ -166,32 +167,15 @@ class PegwatchTest extends TestCase
         $this->get('/holders/smith-john')->assertOk()->assertSee('No dead tenements on record.');
     }
 
-    public function test_free_plan_allows_one_watch_area(): void
-    {
-        $user = User::factory()->create();
-        $this->actingAs($user);
-        $this->get('/watch-areas')->assertOk()->assertSee('My watch area');
-        $area = ['name' => 'Kal east', 'latitude' => -30.8, 'longitude' => 121.5, 'radius_km' => 5, 'event_types' => ['death']];
-
-        $page = fn (array $data) => Livewire::test('pages::watch-areas')->set($data)->call('save');
-        $page($area)->assertHasNoErrors();
-        $page($area)->assertHasErrors('name');
-        $page([...$area, 'event_types' => ['application']])->assertHasErrors('event_types.0');
-
-        $this->assertSame(1, $user->watchAreas()->count());
-        $km2 = DB::scalar('select ST_Area(area::geography) / 1e6 from watch_areas');
-        $this->assertGreaterThan(77, $km2);
-        $this->assertLessThan(80, $km2);
-    }
-
     public function test_alerts_match_events_in_the_watch_area_and_send_one_digest(): void
     {
         Mail::fake();
         $runId = self::seedRegister();
         $user = User::factory()->create();
-        $user->watchAreas()->create(['name' => 'Kal east', 'latitude' => -30.795, 'longitude' => 121.525, 'radius_km' => 2, 'event_types' => ['death', 'release_scheduled']]);
+        $user->watchAreas()->create(['name' => 'Kal east', 'latitude' => -30.795, 'longitude' => 121.525, 'radius_km' => 2, 'event_types' => ['death', 'release_scheduled']])->confirm();
         $far = User::factory()->create();
-        $far->watchAreas()->create(['name' => 'Pilbara', 'latitude' => -21.0, 'longitude' => 119.0, 'radius_km' => 10, 'event_types' => WatchArea::FREE_EVENT_TYPES]);
+        $far->watchAreas()->create(['name' => 'Pilbara', 'latitude' => -21.0, 'longitude' => 119.0, 'radius_km' => 10, 'event_types' => WatchArea::FREE_EVENT_TYPES])->confirm();
+        DB::update("update watch_areas set created_at = now() - interval '1 hour'");
 
         $result = app(AlertMatcher::class)->run($runId);
 
@@ -222,20 +206,14 @@ class PegwatchTest extends TestCase
             ->assertOk()->assertJsonPath('run_id', $runId);
     }
 
-    public function test_free_plan_rejects_event_types_sent_as_an_object(): void
+    public function test_a_watch_stored_with_event_types_as_an_object_matches_nothing(): void
     {
         Mail::fake();
         $runId = self::seedRegister();
         $user = User::factory()->create();
-        $this->actingAs($user);
-        Livewire::test('pages::watch-areas')->set([
-            'name' => 'x', 'latitude' => -30.8, 'longitude' => 121.5, 'radius_km' => 5,
-            'event_types' => ['application' => 'death'],
-        ])->call('save')->assertHasErrors('event_types');
-
-        // A row stored as an object (keys are not elements) still matches nothing.
-        DB::insert("insert into watch_areas (user_id, name, latitude, longitude, radius_km, event_types, created_at, updated_at)
-            values (?, 'x', -30.8, 121.5, 5, '{\"application\": \"death\"}', now(), now())", [$user->id]);
+        // Keys are not elements: a row stored as an object matches nothing.
+        DB::insert("insert into watch_areas (user_id, name, latitude, longitude, radius_km, event_types, confirmed_at, created_at, updated_at)
+            values (?, 'x', -30.8, 121.5, 5, '{\"application\": \"death\"}', now(), now() - interval '1 hour', now())", [$user->id]);
         $this->assertSame(['matched' => 0, 'emails' => 0], app(AlertMatcher::class)->run($runId));
     }
 
@@ -247,7 +225,7 @@ class PegwatchTest extends TestCase
                     jsonb_build_object('release_id', 'R1', 'release_at', timestamptz '2026-12-01 08:30+08'), '2026-12-01 08:30', ?::geometry)",
             [$runId, self::square(121.50, -30.80)]);
 
-        $this->get('/activity?type=release_scheduled')->assertOk()->assertSee('R1 at 1 Dec 2026 08:30 AWST');
+        $this->get('/activity?type=release_scheduled')->assertOk()->assertSee('R1 at 1 Dec 2026, 8:30am AWST');
     }
 
     public function test_malformed_query_input_is_ignored_not_a_server_error(): void
@@ -264,14 +242,15 @@ class PegwatchTest extends TestCase
         self::seedRegister();
         DB::update("update tenements set type = null, status = null where tenid = 'P  1500002'");
         $this->get('/holders/smith-john')->assertOk()->assertSee('P 15/2');
-        $this->get('/tenements/e-15-1')->assertOk()->assertSee('unknown type');
+        // No type: the name comes from the type code.
+        $this->get('/tenements/e-15-1')->assertOk()->assertSeeInOrder(['P 15/2', 'Prospecting licence']);
     }
 
     public function test_hook_without_a_run_id_alerts_on_every_recent_run(): void
     {
         Mail::fake();
         $user = User::factory()->create();
-        $user->watchAreas()->create(['name' => 'Kal east', 'latitude' => -30.795, 'longitude' => 121.525, 'radius_km' => 2, 'event_types' => ['death']]);
+        $user->watchAreas()->create(['name' => 'Kal east', 'latitude' => -30.795, 'longitude' => 121.525, 'radius_km' => 2, 'event_types' => ['death']])->confirm();
         DB::update("update watch_areas set created_at = now() - interval '2 days'");
         $first = self::seedRegister();   // has a death in the area; its hook call was missed
         DB::table('ingest_runs')->insertGetId(['status' => 'ok', 'finished_at' => now()]);  // next night: nothing

@@ -45,3 +45,6 @@ __pycache__/
 report/
 state/
 .DS_Store
+
+# Before and after screenshots for reviews (see AGENTS rules)
+/review

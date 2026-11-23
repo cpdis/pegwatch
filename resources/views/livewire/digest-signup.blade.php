@@ -80,8 +80,8 @@ new class extends Component {
             @endunless
             <div class="flex gap-2">
                 <flux:input id="digest-email-{{ $source }}" wire:model="email" type="email" autocomplete="email" required
-                            :placeholder="__('you@example.com')" :aria-label="__('Email address')" class="flex-1" />
-                <flux:button type="submit" variant="primary">{{ __('Subscribe') }}</flux:button>
+                            :placeholder="__('you@example.com')" :aria-label="__('Email address')" class="flex-1" class:input="max-sm:h-11" />
+                <flux:button type="submit" variant="primary" class="max-sm:h-11">{{ __('Subscribe') }}</flux:button>
             </div>
             <div class="hidden" aria-hidden="true">
                 <input type="text" wire:model="website" tabindex="-1" autocomplete="off">

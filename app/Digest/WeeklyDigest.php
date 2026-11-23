@@ -4,6 +4,7 @@ namespace App\Digest;
 
 use App\Mail\WeeklyDigestMail;
 use App\Models\DigestSubscriber;
+use App\Support\Format;
 use App\Support\Register;
 use App\Support\Slug;
 use Carbon\CarbonImmutable;
@@ -136,15 +137,8 @@ class WeeklyDigest
              group by h.name order by count(*) desc, h.name limit 5", $bind
         ));
 
-        $releases = array_map(fn ($r) => [
-            'fmt_tenid' => trim((string) $r->fmt_tenid), 'slug' => Slug::make((string) $r->fmt_tenid),
-            'release_at' => CarbonImmutable::parse($r->release_at)->setTimezone(self::TZ)->format('D j M, g:ia'),
-            'area_ha' => round((float) $r->area_ha, 1),
-        ], DB::select(
-            'select fmt_tenid, release_at, ST_Area(geom::geography) / 10000 as area_ha from release_pending
-             where release_at >= ? and release_at < ? order by release_at, fmt_tenid limit 15',
-            [$end, $end->addDays(7)]
-        ));
+        // A week with no new extract has nothing to report: the issue says so instead of empty tables.
+        $extract = DB::scalar("select max(tenements_extract) from ingest_runs where status in ('ok', 'baseline') and finished_at < ?", [$end]);
 
         return [
             'period_start' => $start->toIso8601String(),
@@ -153,8 +147,132 @@ class WeeklyDigest
             'freed' => $freed,
             'applications' => $applications,
             'applicants' => $applicants,
-            'releases' => $releases,
+            'releases' => self::releases($end),
+            'extract_at' => $extract ? CarbonImmutable::parse($extract)->toIso8601String() : null,
+            'stale' => array_sum($counts) === 0 && ($extract === null || CarbonImmutable::parse($extract)->lt($start)),
         ];
+    }
+
+    /**
+     * What an issue looks like, before the first one exists (D1): the feed, register
+     * dates included, for the 7 days to the latest extract. Shown on /digest, never
+     * stored or sent.
+     */
+    public function sample(): array
+    {
+        $run = Register::latestRun();
+        $to = CarbonImmutable::parse($run->tenements_extract ?? 'now')->setTimezone(self::TZ)->startOfDay();
+        $from = $to->subDays(6);
+        $f = ['from' => $from->toDateString(), 'to' => $to->toDateString()];
+
+        $counts = array_fill_keys(self::COUNTED, 0);
+        foreach (Register::feedCounts($f, $f['from'], $f['to']) as $byType) {
+            foreach (array_intersect_key($byType, $counts) as $type => $n) {
+                $counts[$type] += $n;
+            }
+        }
+
+        // Mining Notices have no tenement page yet, so the lists leave them out.
+        $apps = array_values(array_filter(Register::feed($f + ['types' => ['application']], 1000), fn ($e) => $e['slug'] !== null));
+        usort($apps, fn ($a, $b) => ($b['area_ha'] ?? 0) <=> ($a['area_ha'] ?? 0));
+        $applicants = [];
+        foreach ($apps as $e) {
+            foreach (array_unique(array_column($e['holders'], 'name')) as $name) {
+                $applicants[$name] = ($applicants[$name] ?? 0) + 1;
+            }
+        }
+        uksort($applicants, fn ($a, $b) => [$applicants[$b], $a] <=> [$applicants[$a], $b]);
+
+        return [
+            'period_start' => $from->utc()->toIso8601String(),
+            'period_end' => $to->setTime(23, 59, 59)->utc()->toIso8601String(),
+            'counts' => $counts,
+            'freed' => $this->sampleFreed($f),
+            'applications' => array_map(self::slim(...), array_slice($apps, 0, 5)),
+            'applicants' => array_map(fn ($name) => ['name' => $name, 'slug' => Slug::make($name), 'n' => $applicants[$name]],
+                array_slice(array_keys($applicants), 0, 5)),
+            'releases' => self::releases(CarbonImmutable::now()),
+            'extract_at' => $run?->tenements_extract ? CarbonImmutable::parse($run->tenements_extract)->toIso8601String() : null,
+            'stale' => false,
+            'sample' => true,
+        ];
+    }
+
+    /**
+     * The week's biggest item by hectares (E4): the freed ground with the most area
+     * uncovered, or the biggest new application, whichever is larger.
+     *
+     * @return array{kind: 'freed'|'application', item: array}|null
+     */
+    public static function lead(array $c): ?array
+    {
+        $freed = $c['freed'][0] ?? null;
+        $app = $c['applications'][0] ?? null;
+        if ($freed === null && $app === null) {
+            return null;
+        }
+
+        return ($freed['uncovered_ha'] ?? 0) >= ($app['area_ha'] ?? 0)
+            ? ['kind' => 'freed', 'item' => $freed]
+            : ['kind' => 'application', 'item' => $app];
+    }
+
+    /** Every upcoming compulsory release from $after, up to 15 (G19). */
+    private static function releases(CarbonImmutable $after): array
+    {
+        return array_map(fn ($r) => [
+            'fmt_tenid' => $r['fmt_tenid'], 'slug' => $r['slug'],
+            'release_at' => CarbonImmutable::parse($r['release_at'])->setTimezone(self::TZ)->format('D j M, g:ia'),
+            'area_ha' => $r['area_ha'],
+            'holders' => array_column($r['holders'], 'name'),
+        ], Register::upcomingReleases(null, 15, $after));
+    }
+
+    /**
+     * Deaths in the sample's window ranked by area no other tenement covers. Deaths
+     * Pegwatch saw carry that share; deaths known only from the register's dates are
+     * measured here against today's tenements, as the nightly diff does.
+     */
+    private function sampleFreed(array $f): array
+    {
+        $deaths = array_filter(Register::feed($f + ['types' => ['death']], 1000),
+            fn ($e) => ($e['details']['kind'] ?? 'ended') === 'ended');
+        usort($deaths, fn ($a, $b) => ($b['area_ha'] ?? 0) <=> ($a['area_ha'] ?? 0));
+        $deaths = array_slice($deaths, 0, 30);
+
+        $register = array_values(array_filter($deaths, fn ($e) => $e['source'] === 'register'));
+        $measured = [];
+        if ($register) {
+            $pairs = implode(', ', array_fill(0, count($register), '(?, ?::date)'));
+            $bind = array_merge(...array_map(fn ($e) => [$e['tenid'], substr($e['at'], 0, 10)], $register));
+            foreach (DB::select(
+                "select d.tenid, ST_Area(d.geom::geography) / 10000 as area_ha,
+                        coalesce(ST_Area(ST_Difference(d.geom, c.cover)::geography), ST_Area(d.geom::geography)) / 10000 as uncovered_ha
+                 from dead_tenements d
+                 left join lateral (select ST_Union(t.geom) as cover from tenements t
+                                    where t.geom && d.geom and ST_Intersects(t.geom, d.geom) and t.type_code not in ('L', 'G')) c on true
+                 where (d.tenid, d.ended_at::date) in ($pairs) and d.geom is not null", $bind) as $r) {
+                $measured[$r->tenid] = [(float) $r->area_ha, (float) $r->uncovered_ha];
+            }
+        }
+
+        $freed = [];
+        foreach ($deaths as $e) {
+            if ($e['source'] === 'register') {
+                if (! isset($measured[$e['tenid']])) {
+                    continue;
+                }
+                [$area, $uncovered] = $measured[$e['tenid']];
+                $e['details'] += ['area_ha' => $area, 'uncovered_share' => $area > 0 ? $uncovered / $area : 0];
+            }
+            $item = self::slim($e);
+            if (($item['uncovered_ha'] ?? 0) >= 1) {
+                $freed[] = $item;
+            }
+        }
+        usort($freed, fn ($a, $b) => $b['uncovered_ha'] <=> $a['uncovered_ha']);
+
+        return array_slice($freed, 0, 10);
     }
 
     /** @return array{sent: int, remaining: int} */
@@ -208,10 +326,11 @@ class WeeklyDigest
     private static function slim(array $e): array
     {
         return [
-            'type' => $e['type'], 'reason' => $e['details']['death_reason'] ?? null, 'label' => $e['label'], 'summary' => $e['summary'],
+            'type' => $e['type'], 'reason' => isset($e['details']['death_reason']) ? Format::sentence($e['details']['death_reason']) : null,
+            'label' => $e['label'], 'summary' => $e['summary'],
             'fmt_tenid' => $e['fmt_tenid'], 'slug' => $e['slug'], 'tenement_type' => $e['tenement_type'],
             'holders' => array_column($e['holders'], 'name'),
-            'area_ha' => isset($e['details']['area_ha']) ? round((float) $e['details']['area_ha'], 1) : null,
+            'area_ha' => isset($e['details']['area_ha']) ? round((float) $e['details']['area_ha'], 1) : ($e['area_ha'] ?? null),
             'uncovered_ha' => isset($e['details']['area_ha'], $e['details']['uncovered_share'])
                 ? round((float) $e['details']['area_ha'] * (float) $e['details']['uncovered_share'], 1) : null,
         ];
