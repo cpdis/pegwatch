@@ -1,31 +1,29 @@
 <x-layouts::auth :title="__('Forgot password')">
     <div class="flex flex-col gap-6">
-        <x-auth-header :title="__('Forgot password')" :description="__('Enter your email to receive a password reset link')" />
+        <x-auth-header :title="__('Forgot your password?')" :description="__('We email you a link to set a new one.')" />
 
-        <!-- Session Status -->
-        <x-auth-session-status class="text-center" :status="session('status')" />
+        <x-auth-session-status :status="session('status')" />
 
         <form method="POST" action="{{ route('password.email') }}" class="flex flex-col gap-6">
             @csrf
 
-            <!-- Email Address -->
             <flux:input
                 name="email"
                 :label="__('Email address')"
                 type="email"
                 required
                 autofocus
-                placeholder="email@example.com"
+                placeholder="you@example.com"
             />
 
             <flux:button variant="primary" type="submit" class="w-full" data-test="email-password-reset-link-button">
-                {{ __('Email password reset link') }}
+                {{ __('Email me a reset link') }}
             </flux:button>
         </form>
 
-        <div class="space-x-1 rtl:space-x-reverse text-center text-sm text-zinc-400">
-            <span>{{ __('Or, return to') }}</span>
-            <flux:link :href="route('login')" wire:navigate>{{ __('log in') }}</flux:link>
-        </div>
+        <flux:text class="text-sm">
+            {{ __('You don\'t need a password to use Pegwatch.') }}
+            <flux:link :href="route('login')" wire:navigate>{{ __('Email me a login link instead') }}</flux:link>
+        </flux:text>
     </div>
 </x-layouts::auth>
