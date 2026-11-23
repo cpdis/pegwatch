@@ -185,4 +185,27 @@ class Format
 
         return self::localDate($value, $d->format('H:i:s') !== '00:00:00');
     }
+
+    // b-interact (map interaction)
+
+    /**
+     * What the map script needs from the server, sent once per page in a meta tag:
+     * the TENGRAPH link, the status palette, each mineral field's display name by
+     * number (so the hover card can say "Kanowna" without a request), and the
+     * satellite layer when one is configured.
+     */
+    public static function mapConfig(): array
+    {
+        $satellite = config('pegwatch.satellite');
+
+        return [
+            'tengraph' => self::TENGRAPH_URL,
+            'status' => self::STATUS_COLOURS,
+            'fields' => array_map(fn (array $f) => $f['district'] ?? $f['field'], config('mineral_fields')),
+            'satellite' => filled($satellite['url'] ?? null) ? [
+                'url' => $satellite['url'],
+                'attribution' => (string) ($satellite['attribution'] ?? ''),
+            ] : null,
+        ];
+    }
 }
