@@ -10,7 +10,9 @@ name: Nightly ingest
 #   each run restores the previous successful run's state.
 on:
   schedule:
-    - cron: "0 11 * * *"   # 7pm AWST; the live layer is stamped about 4am AWST
+    # Off the hour: GitHub delays or drops top-of-hour schedules under load
+    # (the first one, due 11:00 UTC on 22 Nov, started at 18:12).
+    - cron: "23 11 * * *"   # 7:23pm AWST; the live layer is stamped about 4am AWST
   workflow_dispatch:
     inputs:
       full_dead:
