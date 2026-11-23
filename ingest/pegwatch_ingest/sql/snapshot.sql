@@ -8,10 +8,15 @@ language sql immutable as $$
     ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(gj), 4326)), 3)) end
 $$;
 
+-- Tables the app reads are emptied with DELETE, not TRUNCATE: TRUNCATE takes an
+-- ACCESS EXCLUSIVE lock held until this transaction commits (after diff.sql),
+-- so every page and tile would hang for the whole run. DELETE lets readers keep
+-- seeing last night's rows until the commit. Autovacuum reclaims the dead rows.
+
 -- 1. Rotate tenements -> tenements_prev
-truncate tenements_prev;
+delete from tenements_prev;
 insert into tenements_prev select * from tenements;
-truncate tenements;
+delete from tenements;
 
 insert into tenements (tenid, fmt_tenid, type, type_code, status, survstatus, holders,
                        holder_is_company, legal_area, area_unit, special_ind, extract_at,
@@ -88,9 +93,9 @@ on conflict (tenid, ended_at) do update
       geom = coalesce(excluded.geom, dead_tenements.geom);
 
 -- 3. Release pending
-truncate release_pending_prev;
+delete from release_pending_prev;
 insert into release_pending_prev select * from release_pending;
-truncate release_pending;
+delete from release_pending;
 insert into release_pending
 select distinct on (rtrim(props->>'tenid'), rtrim(props->>'rlesid'))
        rtrim(props->>'tenid'), rtrim(props->>'rlesid'), pw_text(props->'fmt_tenid'),
@@ -100,9 +105,9 @@ from stg_release_pending
 where pw_text(props->'tenid') is not null and pw_text(props->'rlesid') is not null;
 
 -- 4. Amalgamation and restoration pending
-truncate amalgamation_pending_prev;
+delete from amalgamation_pending_prev;
 insert into amalgamation_pending_prev select * from amalgamation_pending;
-truncate amalgamation_pending;
+delete from amalgamation_pending;
 insert into amalgamation_pending
 select distinct on (rtrim(props->>'tenid'), rtrim(props->>'amalgid'))
        rtrim(props->>'tenid'), rtrim(props->>'amalgid'), pw_text(props->'fmt_tenid'),
@@ -111,7 +116,7 @@ select distinct on (rtrim(props->>'tenid'), rtrim(props->>'amalgid'))
 from stg_amalgamation_pending
 where pw_text(props->'tenid') is not null and pw_text(props->'amalgid') is not null;
 
-truncate restoration_pending;
+delete from restoration_pending;
 insert into restoration_pending
 select distinct on (rtrim(props->>'tenid'), rtrim(props->>'restnid'))
        rtrim(props->>'tenid'), rtrim(props->>'restnid'), pw_text(props->'fmt_tenid'),
@@ -121,7 +126,7 @@ from stg_restoration_pending
 where pw_text(props->'tenid') is not null and pw_text(props->'restnid') is not null;
 
 -- 5. Land restrictions: replaced wholesale
-truncate land_restrictions;
+delete from land_restrictions;
 insert into land_restrictions (kind, land_id, name, purpose, status, props, geom)
 select 'file_notation', pw_text(props->'fmt_land_i'), pw_text(props->'official_n'),
        pw_text(props->'purpose'), pw_text(props->'status'), props, pw_geom(gj) from stg_file_notation

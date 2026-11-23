@@ -73,6 +73,10 @@ has one watch area (a circle up to 50 km) and the death and release alerts.
    - `PEGWATCH_INGEST_TOKEN`: the same value as in Cloud
    The next nightly run takes a fresh baseline in that database (about a
    minute); changes and alerts start the night after.
+7. Before real users arrive, edit the cluster (**Resources**, then **Databases**,
+   the cluster's **...**, then **Edit settings**): point-in-time retention 7 days or more,
+   since `tenement_events` cannot be rebuilt from SLIP. Changing the compute range restarts
+   the cluster and drops connections for a moment, so do it outside the 7pm AWST ingest.
 
 ## Ingest (`ingest/`)
 
@@ -104,6 +108,15 @@ date is in the layer.
 `.github/workflows/nightly-ingest.yml` runs this at 7pm AWST, keeping the
 database between runs as a workflow artifact, and posts the report as the
 job summary.
+
+When it writes to the app's database it also saves `pegwatch-history`, a 14-day
+artifact holding `tenement_events`, `ingest_runs`, `layer_extracts` and
+`mining_notices` (no user data). Restore one with
+`pg_restore --no-owner --data-only --dbname "$DATABASE_URL" history.dump` into a database
+whose schema already exists.
+
+The snapshot empties the tables the app reads with `DELETE`, not `TRUNCATE`, so pages
+keep serving last night's data until the run commits instead of waiting on its lock.
 
 Timestamps: SLIP encodes AWST wall-clock times as if they were UTC. The live
 layer's extract is stamped about 4am AWST and holds lodgements to the end of the

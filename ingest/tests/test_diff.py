@@ -190,3 +190,45 @@ def test_company_detection(conn):
         cur.execute("select pw_is_company('SMITH, JOHN'), pw_is_company('NORTHERN STAR RESOURCES LIMITED'),"
                     " pw_is_company('ACME PTY LTD'), pw_is_company('BROWN, MARY ANNE')")
         assert cur.fetchone() == (False, True, True, False)
+
+
+READ_TABLES = ("tenements", "tenements_prev", "release_pending", "release_pending_prev",
+               "amalgamation_pending", "amalgamation_pending_prev", "restoration_pending",
+               "land_restrictions", "dead_tenements", "tenement_events")
+
+
+def test_readers_not_blocked_during_snapshot(conn, monkeypatch):
+    """The app keeps reading last night's data while the snapshot and diff run."""
+    stage(conn, night1())
+    runner.run(DSN, None, False, True, None, min_row_ratio=0, check_notices=False)
+    stage(conn, night2())
+
+    seen = {}
+    real = db.run_script
+
+    def probe(c, name, run_id):
+        real(c, name, run_id)  # leaves the ingest's transaction open
+        with psycopg.connect(DSN, autocommit=True) as reader:
+            reader.execute("set lock_timeout = '1s'")
+            for table in READ_TABLES:
+                seen[(name, table)] = reader.execute(f"select count(*) from {table}").fetchone()[0]
+
+    monkeypatch.setattr(db, "run_script", probe)
+    runner.run(DSN, None, False, True, None, min_row_ratio=0, check_notices=False)
+    # Before the commit, readers see the old snapshot: night 1's ten tenements.
+    assert seen[("snapshot.sql", "tenements")] == 10
+    assert seen[("diff.sql", "tenements")] == 10
+    with conn.cursor() as cur:
+        cur.execute("select count(*) from tenements")
+        assert cur.fetchone()[0] == len(night2())
+
+
+def test_schema_reapply_takes_no_exclusive_lock(conn):
+    """Re-running the schema each night must not queue behind (or block) open reads."""
+    with psycopg.connect(DSN) as reader:  # an open read transaction, like a slow page
+        for table in READ_TABLES:
+            reader.execute(f"select count(*) from {table}")
+        with psycopg.connect(DSN) as c:
+            c.execute("set lock_timeout = '1s'")
+            c.execute(db.sql_file("schema.sql"))
+            c.commit()
