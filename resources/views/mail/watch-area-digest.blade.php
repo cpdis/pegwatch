@@ -16,6 +16,9 @@ from the department's extract of {{ $run?->tenements_extract ? \Illuminate\Suppo
 Open the map
 </x-mail::button>
 
+You get this email because of your watch area "{{ $area->name }}". To stop these emails,
+[delete the watch area]({{ route('watch-areas.index') }}).
+
 This is a screening aid, not advice that ground can be applied for. Confirm every tenement in
 TENGRAPH and with the Mining Registrar before you act.
 

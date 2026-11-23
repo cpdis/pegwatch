@@ -63,8 +63,8 @@
                     </flux:menu>
                 </flux:dropdown>
             @else
-                <flux:button variant="ghost" size="sm" :href="route('login')" class="ms-3" wire:navigate>{{ __('Log in') }}</flux:button>
-                <flux:button variant="primary" size="sm" :href="route('register')" class="ms-2" wire:navigate>{{ __('Free alerts') }}</flux:button>
+                <flux:button variant="ghost" size="sm" :href="route('login')" class="ms-3 max-sm:hidden" wire:navigate>{{ __('Log in') }}</flux:button>
+                <flux:button variant="primary" size="sm" :href="route('register')" class="ms-2 shrink-0" wire:navigate>{{ __('Free alerts') }}</flux:button>
             @endauth
         </flux:header>
 
@@ -80,6 +80,9 @@
                 <flux:sidebar.item icon="sparkles" :href="route('pro')" :current="request()->routeIs('pro')" wire:navigate>{{ __('Pricing') }}</flux:sidebar.item>
                 @auth
                     <flux:sidebar.item icon="bell-alert" :href="route('watch-areas.index')" wire:navigate>{{ __('My watch area') }}</flux:sidebar.item>
+                @else
+                    <flux:sidebar.item icon="arrow-right-end-on-rectangle" :href="route('login')" wire:navigate>{{ __('Log in') }}</flux:sidebar.item>
+                    <flux:sidebar.item icon="bell-alert" :href="route('register')" wire:navigate>{{ __('Free alerts') }}</flux:sidebar.item>
                 @endauth
             </flux:sidebar.nav>
         </flux:sidebar>

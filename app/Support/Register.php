@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\DB;
  */
 class Register
 {
+    public const SEARCH_MAX_LENGTH = 100;
+
     public const EVENT_LABELS = [
         'application' => 'New application',
         'appeared' => 'Appeared on the register',
@@ -321,34 +323,127 @@ class Register
         }
     }
 
-    public static function search(string $q, int $limit = 10): array
+    /**
+     * Cmd+K search: tenements by ID prefix (live first, then dead ones that
+     * have a page) and holders by name. Returns one ranked list, so Enter
+     * and the first row always agree: a query shaped like a tenement ID
+     * ("E45", "m 70/1") lists tenements first, anything else lists holders
+     * first. Holder names that differ only in punctuation share a page
+     * (pw_slug), so they are one result.
+     */
+    public static function search(string $q, int $limit = 8): array
     {
-        $q = mb_check_encoding($q, 'UTF-8') ? trim($q) : '';
+        $q = mb_check_encoding($q, 'UTF-8') ? trim(mb_substr($q, 0, self::SEARCH_MAX_LENGTH)) : '';
         if (mb_strlen($q) < 2) {
-            return ['tenements' => [], 'holders' => []];
+            return [];
         }
+
         $compact = preg_replace('/[^a-z0-9]/', '', strtolower($q));
-        $tenements = $compact === '' ? [] : DB::select(
-            "select fmt_tenid, type, status from tenements
-             where regexp_replace(lower(fmt_tenid), '[^a-z0-9]', '', 'g') like ?
-             order by length(fmt_tenid), fmt_tenid limit ?",
-            [$compact.'%', $limit]
+        $tenements = [];
+        if ($compact !== '') {
+            $tenements = DB::select(
+                'select fmt_tenid, type, status, null as death_reason from tenements
+                 where pw_compact(fmt_tenid) like ? order by pw_compact(fmt_tenid), fmt_tenid limit ?',
+                [$compact.'%', $limit]
+            );
+            // Dead tenements have pages too. Skip any ID that is live again.
+            if (count($tenements) < $limit) {
+                $tenements = [...$tenements, ...DB::select(
+                    "select fmt_tenid, type, 'DEAD' as status, death_reason from (
+                       select fmt_tenid, type, death_reason, ended_at from dead_tenements
+                       where pw_compact(fmt_tenid) like ? order by pw_compact(fmt_tenid), ended_at desc limit ?
+                     ) d where not exists (select 1 from tenements t where pw_slug(t.fmt_tenid) = pw_slug(d.fmt_tenid))",
+                    [$compact.'%', $limit * 4]
+                )];
+            }
+        }
+
+        // Holders are matched on their slugs, so punctuation and spacing
+        // don't matter ("smith john" finds "SMITH, JOHN"), and names that
+        // share a page are one result. Live holders rank by live tenement
+        // count; holders found only on dead tenements fill any space left.
+        $slug = Slug::make($q);
+        $holders = $slug === '' ? [] : self::searchHolders($slug, $limit);
+
+        $seen = [];
+        $t = [];
+        foreach ($tenements as $row) {
+            $key = Slug::make($row->fmt_tenid);
+            if (isset($seen[$key]) || count($t) >= $limit) {
+                continue;
+            }
+            $seen[$key] = true;
+            $t[] = [
+                'kind' => 'tenement', 'slug' => $key, 'fmt_tenid' => trim($row->fmt_tenid),
+                'type' => $row->type, 'status' => $row->status, 'death_reason' => $row->death_reason,
+            ];
+        }
+        $h = array_map(fn ($row) => [
+            'kind' => 'holder', 'slug' => $row->slug, 'name' => $row->name,
+            'live' => (int) $row->live,
+        ], $holders);
+
+        return preg_match('/^[a-z]{1,3}\s*\d/i', $q) ? [...$t, ...$h] : [...$h, ...$t];
+    }
+
+    /**
+     * A slug of three or more characters is a substring match, served by
+     * the trigram indexes on pw_holder_text(). Shorter ones are a prefix
+     * match on live holders only: a two-character substring matches nearly
+     * every name and can't use a trigram index.
+     */
+    private static function searchHolders(string $slug, int $limit): array
+    {
+        $order = 'order by slug = ? desc, live desc, slug limit ?';
+        if (strlen($slug) < 3) {
+            return DB::select(
+                "select slug, (array_agg(name order by n desc, name))[1] as name, sum(n) as live
+                 from (select name, pw_slug(name) as slug, n from (
+                         select h.name, count(*) as n from tenements t
+                         cross join lateral unnest(t.holders) as h(name)
+                         where array_to_string(t.holders, ' ') ilike ? group by h.name) names
+                       ) m
+                 where slug like ? group by slug $order",
+                ['%'.$slug[0].'%'.substr($slug, 1).'%', "$slug%", $slug, $limit]
+            );
+        }
+
+        $prefixFirst = 'order by slug = ? desc, slug like ? desc, live desc, slug limit ?';
+        $live = DB::select(
+            "select slug, (array_agg(name order by n desc, name))[1] as name, sum(n) as live
+             from (select name, pw_slug(name) as slug, n from (
+                     select h.name, count(*) as n from tenements t
+                     cross join lateral unnest(t.holders) as h(name)
+                     where pw_holder_text(t.holders) like ? group by h.name) names
+                   ) m
+             where slug like ? group by slug $prefixFirst",
+            ["%$slug%", "%$slug%", $slug, "$slug%", $limit]
         );
-        $holders = DB::select(
-            'select h.name, count(*) as n from tenements t cross join lateral unnest(t.holders) as h(name)
-             where h.name ilike ? group by h.name order by count(*) desc limit ?',
-            ['%'.str_replace(['%', '_'], ['\%', '\_'], $q).'%', $limit]
+        if (count($live) >= $limit) {
+            return $live;
+        }
+
+        // Every live match is in $live by now, so what's left is holders
+        // found only on dead tenements. The row cap bounds a common word
+        // ("gold") on the full DEAD history; an exact name is looked up by
+        // index first so the cap can't hide it.
+        $known = array_map(fn ($r) => $r->slug, $live);
+        $dead = DB::select(
+            "select slug, min(name) as name, 0 as live from (
+               (select h.name, pw_slug(h.name) as slug from dead_tenements d
+                cross join lateral unnest(d.holders) as h(name)
+                where public.pw_slugs(d.holders) @> array[?]::text[] and pw_slug(h.name) = ?)
+               union all
+               (select h.name, pw_slug(h.name) from dead_tenements d
+                cross join lateral unnest(d.holders) as h(name)
+                where pw_holder_text(d.holders) like ? and pw_slug(h.name) like ? limit 2000)
+             ) m
+             where not (slug = any(?::text[]))
+             group by slug $prefixFirst",
+            [$slug, $slug, "%$slug%", "%$slug%", '{'.implode(',', $known).'}', $slug, "$slug%", $limit - count($live)]
         );
 
-        return [
-            'tenements' => array_map(fn ($t) => [
-                'fmt_tenid' => trim($t->fmt_tenid), 'slug' => Slug::make($t->fmt_tenid),
-                'type' => $t->type, 'status' => $t->status,
-            ], $tenements),
-            'holders' => array_map(fn ($h) => [
-                'name' => $h->name, 'slug' => Slug::make($h->name), 'count' => (int) $h->n,
-            ], $holders),
-        ];
+        return [...$live, ...$dead];
     }
 
     private static function bbox(?string $geojson): ?array

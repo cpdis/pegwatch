@@ -109,7 +109,7 @@ new #[Title('My watch area')] class extends Component {
             @foreach ($areas as $a)
                 <flux:card wire:key="area-{{ $a->id }}" class="space-y-2">
                     <flux:heading>{{ $a->name }}</flux:heading>
-                    <flux:text>{{ $a->radius_km }} km around {{ number_format($a->latitude, 4) }}, {{ number_format($a->longitude, 4) }} · {{ $a->tenements }} {{ __('tenements inside today') }}</flux:text>
+                    <flux:text>{{ $a->radius_km }} km around {{ number_format($a->latitude, 4) }}, {{ number_format($a->longitude, 4) }} · {{ trans_choice('{1} 1 tenement inside today|[0,*] :n tenements inside today', $a->tenements, ['n' => number_format($a->tenements)]) }}</flux:text>
                     <ul class="list-disc ps-5 text-sm">
                         @foreach ($a->event_types as $t)
                             <li>{{ self::TYPE_LABELS[$t] ?? $t }}</li>

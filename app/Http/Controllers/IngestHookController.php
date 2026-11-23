@@ -18,6 +18,7 @@ class IngestHookController extends Controller
         $runId = $request->integer('run_id') ?: null;
 
         $alerts = $matcher->run($runId);
+        TileController::pruneExpired();
 
         return response()->json(['run_id' => $runId] + $alerts + ['digest' => $digest->run()]);
     }

@@ -10,7 +10,7 @@ name: Nightly ingest
 #   each run restores the previous successful run's state.
 on:
   schedule:
-    - cron: "0 11 * * *"   # 7pm AWST; the live layer is stamped around midday
+    - cron: "0 11 * * *"   # 7pm AWST; the live layer is stamped about 4am AWST
   workflow_dispatch:
     inputs:
       full_dead:
@@ -87,6 +87,26 @@ jobs:
           if [ "${{ inputs.full_dead }}" = "true" ]; then args="$args --full-dead"; fi
           python -m pegwatch_ingest $args
           cat report/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      # tenement_events is the diff history and cannot be rebuilt from SLIP, so
+      # keep two weeks of nightly copies outside Laravel Cloud as well. Only the
+      # ingest's own tables: no users or watch areas (personal data) here.
+      - name: Back up the event history
+        if: ${{ !cancelled() && env.USE_ARTIFACT != 'true' }}
+        run: |
+          mkdir -p backup
+          /usr/lib/postgresql/17/bin/pg_dump -Fc --no-owner \
+            -t tenement_events -t ingest_runs -t layer_extracts -t mining_notices \
+            "$DATABASE_URL" -f backup/history.dump
+          ls -lh backup
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && env.USE_ARTIFACT != 'true' }}
+        with:
+          name: pegwatch-history
+          path: backup/history.dump
+          retention-days: 14
+          if-no-files-found: error
 
       - name: Tell the app to send alerts
         if: ${{ env.HOOK_URL != '' }}
