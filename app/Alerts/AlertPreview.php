@@ -47,7 +47,7 @@ final class AlertPreview
                 'subject' => (new WatchAreaDigest($area, $events, null))->envelope()->subject,
                 'items' => array_map(fn ($e) => [
                     'id' => $e['fmt_tenid'],
-                    'meta' => Format::sentence($e['tenement_type']),
+                    'meta' => WatchAreaDigest::typeName($e['tenement_type']),
                     'line' => WatchAreaDigest::line($e),
                 ], $events),
             ];

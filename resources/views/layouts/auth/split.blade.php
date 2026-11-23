@@ -19,21 +19,8 @@
                     <h2 class="mt-3 text-4xl leading-[1.05] font-black tracking-tight xl:text-5xl">{{ __('Know when ground near you changes.') }}</h2>
                     <p class="mt-4 max-w-md text-zinc-300">{{ __('Circle an area, or pick a tenement or a holder. When a tenement there is recorded dead or ground is scheduled for release, we email you after that night\'s register check.') }}</p>
 
-                    <figure class="mt-8 overflow-hidden rounded-xl bg-white text-zinc-900 shadow-2xl ring-1 ring-white/10" aria-label="{{ __('An example alert email') }}">
-                        <div class="border-b border-zinc-200 px-5 py-3 text-xs text-zinc-500">
-                            <div><span class="font-medium text-zinc-700">{{ __('From') }}</span> Pegwatch</div>
-                            <div class="mt-0.5 truncate"><span class="font-medium text-zinc-700">{{ __('Subject') }}</span> {{ $preview['subject'] }}</div>
-                        </div>
-                        <div class="space-y-4 px-5 py-4 text-sm">
-                            @foreach ($preview['items'] as $item)
-                                <div>
-                                    <div><span class="font-semibold tabular-nums">{{ $item['id'] }}</span> <span class="text-zinc-500">· {{ $item['meta'] }}</span></div>
-                                    <p class="mt-0.5 text-zinc-700">{{ $item['line'] }}</p>
-                                </div>
-                            @endforeach
-                        </div>
-                    </figure>
-                    <figcaption class="mt-2 text-xs text-zinc-500">{{ __('Built from the latest changes on the register.') }}</figcaption>
+                    <x-alert-preview :preview="$preview" class="mt-8" />
+                    <p class="mt-2 text-xs text-zinc-500">{{ __('Built from the latest changes on the register.') }}</p>
                 </div>
 
                 <p class="text-xs text-zinc-500">{{ __('A screening aid, not advice. Confirm in TENGRAPH and with the Mining Registrar.') }}</p>

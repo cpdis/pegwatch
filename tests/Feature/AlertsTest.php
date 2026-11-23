@@ -144,7 +144,8 @@ class AlertsTest extends TestCase
         $this->deaths();
         $releaseAt = now()->addDays(9)->setTimezone('Australia/Perth')->setTime(8, 30);
         $this->event('release_scheduled', 'E 26/1', ['release_id' => 'R7', 'release_at' => $releaseAt->toIso8601String(), 'area_ha' => 12.3],
-            x: 121.50, tenType: 'EXPLORATION LICENCE', holders: '{"ACME GOLD PTY LTD"}');
+            // Some events carry only the type code; the email still names it.
+            x: 121.50, tenType: 'E', holders: '{"ACME GOLD PTY LTD"}');
         $area = $this->watch();
 
         app(AlertMatcher::class)->run($this->run);

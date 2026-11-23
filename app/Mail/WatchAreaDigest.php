@@ -114,13 +114,19 @@ class WatchAreaDigest extends Mailable
             $out[$group][] = [
                 'id' => $e['fmt_tenid'],
                 'url' => url('/tenements/'.$e['slug']),
-                'meta' => implode(' · ', array_filter([Format::sentence($e['tenement_type']), Format::field($e['fmt_tenid'])])),
+                'meta' => implode(' · ', array_filter([self::typeName($e['tenement_type']), Format::field($e['fmt_tenid'])])),
                 'line' => self::line($e),
                 'holders' => implode(', ', array_slice($names, 0, 3)).(count($names) > 3 ? ' +'.(count($names) - 3) : ''),
             ];
         }
 
         return array_filter(array_merge(array_fill_keys(array_keys(self::GROUPS), []), $out));
+    }
+
+    /** "Exploration licence", whether the event carries the type's name or only its code ("E"). */
+    public static function typeName(?string $type): string
+    {
+        return Format::TYPE_NAMES[strtoupper(trim((string) $type))] ?? Format::sentence($type);
     }
 
     /** What happened, in the register's terms. Never says ground "is open". */
