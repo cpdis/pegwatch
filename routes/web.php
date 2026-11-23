@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ActivityRssController;
 use App\Http\Controllers\DigestUnsubscribeController;
 use App\Http\Controllers\IngestHookController;
 use App\Http\Controllers\StripeWebhookController;
@@ -30,6 +31,10 @@ Route::get('tiles/{layer}/{z}/{x}/{y}.mvt', [TileController::class, 'show'])
 
 Route::post('hooks/ingest-complete', IngestHookController::class)
     ->withoutMiddleware([PreventRequestForgery::class])->name('hooks.ingest');
+
+// e-activity
+// Public and cookie-free, like the tiles, so a CDN can cache it.
+Route::get('activity.rss', ActivityRssController::class)->withoutMiddleware('web')->name('activity.rss');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::redirect('dashboard', '/watch-areas')->name('dashboard');
