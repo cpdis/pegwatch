@@ -37,8 +37,8 @@ class Format
     public const EVENT_COLOURS = [
         'application' => '#2563eb', 'appeared' => '#2563eb', 'reappeared' => '#2563eb',
         'death' => '#111827', 'grant' => '#16a34a', 'holder_change' => '#9333ea',
-        'shrink' => '#ea580c', 'grow' => '#0891b2', 'release_scheduled' => '#dc2626',
-        'released' => '#dc2626', 'release_cancelled' => '#6b7280', 'status_change' => '#6b7280',
+        'shrink' => '#ea580c', 'grow' => '#0891b2', 'release_scheduled' => '#c026d3',
+        'released' => '#c026d3', 'release_cancelled' => '#6b7280', 'status_change' => '#6b7280',
     ];
 
     /** Register timestamps are AWST wall-clock values stored without a zone. */
