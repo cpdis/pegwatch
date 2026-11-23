@@ -151,76 +151,72 @@ class Register
         ));
     }
 
+    /**
+     * A holder's portfolio page: who they are, their live and pending
+     * tenements (with a summary by type), their dead ones (a true count and
+     * the latest 200), applications and deaths by month, and the map focus.
+     * Slugs are pw_slug() values; anything else is not a holder.
+     */
     public static function holder(string $slug): ?array
     {
-        $rows = DB::select(
-            'select t.fmt_tenid, t.type, t.type_code, t.status, t.applied_at, t.granted_at, t.ends_at,
-                    t.area_ha, h.name, h.is_company
-             from tenements t
-             cross join lateral unnest(t.holders, t.holder_is_company) as h(name, is_company)
-             where pw_slug(h.name) = ?
-             order by t.applied_at desc nulls last',
-            [$slug]
-        );
-        $dead = DB::select(
-            'select d.fmt_tenid, d.type, d.death_reason, d.ended_at, h.name as holder_name, h.is_company as holder_is_company
-             from dead_tenements d
-             cross join lateral unnest(d.holders, d.holders_are_company) as h(name, is_company)
-             where pw_slugs(d.holders) @> array[?]::text[] and pw_slug(h.name) = ?
-             order by d.ended_at desc limit 200',
-            [$slug, $slug]
-        );
-        if (! $rows && ! $dead) {
+        if ($slug === '' || Slug::make($slug) !== $slug) {
             return null;
         }
-        $name = $rows[0]->name ?? $dead[0]->holder_name;
-        $isCompany = (bool) ($rows[0]->is_company ?? $dead[0]->holder_is_company);
-
-        $byMonth = DB::select(
-            "select to_char(date_trunc('month', t.applied_at), 'YYYY-MM') as month, count(*) as n
-             from tenements t cross join lateral unnest(t.holders) as h(name)
-             where pw_slug(h.name) = ? and t.applied_at >= now() - interval '24 months'
-             group by 1 order by 1",
-            [$slug]
+        // The name most tenements carry for this slug; dead-only holders from
+        // a bounded sample of their dead tenements.
+        $who = DB::selectOne(
+            'select h.name, h.is_company from tenements t
+             cross join lateral unnest(t.holders, t.holder_is_company) as h(name, is_company)
+             where pw_holder_text(t.holders) like ? and pw_slug(h.name) = ?
+             group by 1, 2 order by count(*) desc, 1 limit 1',
+            ["%$slug%", $slug]
+        ) ?? DB::selectOne(
+            'select h.name, h.is_company from (
+               select holders, holders_are_company from dead_tenements
+               where pw_slugs(holders) @> array[?]::text[] limit 500) d
+             cross join lateral unnest(d.holders, d.holders_are_company) as h(name, is_company)
+             where pw_slug(h.name) = ? group by 1, 2 order by count(*) desc, 1 limit 1',
+            [$slug, $slug]
         );
-
-        $extent = DB::selectOne(
-            'select ST_AsGeoJSON(ST_Extent(t.geom)) as bbox, sum(t.area_ha) as area_ha,
-                    ST_AsGeoJSON(ST_SimplifyPreserveTopology(ST_Collect(t.geom), 0.0005), 5) as geojson
-             from tenements t cross join lateral unnest(t.holders) as h(name)
-             where pw_slug(h.name) = ?',
-            [$slug]
-        );
-
-        // Zero-fill the last 24 months so the chart has a steady time axis.
-        $counts = array_column(array_map(fn ($r) => (array) $r, $byMonth), 'n', 'month');
-        $months = [];
-        $cursor = now('Australia/Perth')->startOfMonth()->subMonths(23);
-        for ($i = 0; $i < 24; $i++) {
-            $key = $cursor->format('Y-m');
-            $months[] = ['month' => $key, 'n' => (int) ($counts[$key] ?? 0)];
-            $cursor = $cursor->addMonth();
+        if (! $who) {
+            return null;
         }
 
+        $rows = self::holderTenements($slug);
+        $summary = ['live' => 0, 'pending' => 0, 'area_ha' => 0.0, 'expiring_90d' => 0];
+        $byType = [];
+        foreach ($rows as $r) {
+            $key = $r['type_code'] ?? '?';
+            $byType[$key] ??= ['type_code' => $key, 'label' => $r['type_label'], 'live' => 0, 'pending' => 0, 'area_ha' => 0.0];
+            $status = $r['status'] === 'LIVE' ? 'live' : ($r['status'] === 'PENDING' ? 'pending' : null);
+            if ($status) {
+                $summary[$status]++;
+                $byType[$key][$status]++;
+            }
+            $summary['area_ha'] += $r['area_ha'] ?? 0;
+            $byType[$key]['area_ha'] += $r['area_ha'] ?? 0;
+            $summary['expiring_90d'] += (int) $r['expires_90d'];
+        }
+        $summary['area_ha'] = round($summary['area_ha']);
+        usort($byType, fn ($a, $b) => [$b['live'] + $b['pending'], $a['type_code']] <=> [$a['live'] + $a['pending'], $b['type_code']]);
+
+        $summary['dead'] = (int) DB::scalar(
+            'select count(distinct tenid) from dead_tenements where pw_slugs(holders) @> array[?]::text[]', [$slug]
+        );
+        $dead = DB::select(
+            'select fmt_tenid, type, death_reason, ended_at from dead_tenements
+             where pw_slugs(holders) @> array[?]::text[] order by ended_at desc limit 200',
+            [$slug]
+        );
+
+        [$months, $summary['applied_12m']] = self::holderActivity($slug);
+        $focus = self::holderFocus($slug, $rows === []);
+
         return [
-            'holder' => ['name' => $name, 'slug' => $slug, 'is_company' => $isCompany],
-            'summary' => [
-                'live' => count(array_filter($rows, fn ($r) => $r->status === 'LIVE')),
-                'pending' => count(array_filter($rows, fn ($r) => $r->status === 'PENDING')),
-                'area_ha' => round((float) ($extent->area_ha ?? 0)),
-                'dead' => count($dead),
-            ],
-            'bbox' => self::bbox($extent->bbox ?? null),
-            'tenements' => array_map(fn ($r) => [
-                'fmt_tenid' => trim($r->fmt_tenid),
-                'slug' => Slug::make($r->fmt_tenid),
-                'type' => $r->type,
-                'status' => $r->status,
-                'applied_at' => $r->applied_at,
-                'granted_at' => $r->granted_at,
-                'ends_at' => $r->ends_at,
-                'area_ha' => $r->area_ha !== null ? round((float) $r->area_ha, 1) : null,
-            ], $rows),
+            'holder' => ['name' => $who->name, 'slug' => $slug, 'is_company' => (bool) $who->is_company],
+            'summary' => $summary,
+            'by_type' => $byType,
+            'tenements' => $rows,
             'dead' => array_map(fn ($r) => [
                 'fmt_tenid' => trim($r->fmt_tenid),
                 'slug' => Slug::make($r->fmt_tenid),
@@ -228,8 +224,11 @@ class Register
                 'reason' => $r->death_reason,
                 'ended_at' => $r->ended_at,
             ], $dead),
-            'applications_by_month' => $months,
-            'geometry' => json_decode($extent->geojson ?? 'null'),
+            'activity_by_month' => $months,
+            'dead_since' => self::deadHistoryStart(),
+            'focus' => $focus['features'],
+            'focus_dead' => $rows === [],
+            'bbox' => $focus['bbox'],
             'events' => self::events(['holder_slug' => $slug], 50),
         ];
     }
@@ -472,5 +471,137 @@ class Register
         $ys = array_column($coords, 1);
 
         return [min($xs), min($ys), max($xs), max($ys)];
+    }
+
+    // d-holders: holder portfolio, name-match groups, search ranking and places.
+
+    /**
+     * A holder's live and pending tenements, newest application first, with
+     * their expiry state from today in Perth: past expiry but still live,
+     * expiring within 12 months, and expiring within 90 days.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function holderTenements(string $slug): array
+    {
+        $today = CarbonImmutable::now('Australia/Perth')->startOfDay();
+
+        return array_map(function ($r) use ($today) {
+            $ends = $r->ends_at === null ? null : CarbonImmutable::parse($r->ends_at, 'Australia/Perth')->startOfDay();
+            $live = $r->status === 'LIVE' && $ends !== null && $ends->year < 2999;
+
+            return [
+                'fmt_tenid' => trim($r->fmt_tenid),
+                'slug' => Slug::make($r->fmt_tenid),
+                'type' => $r->type,
+                'type_code' => $r->type_code,
+                'type_label' => Format::TYPE_NAMES[$r->type_code] ?? (Format::sentence($r->type) ?: 'Unknown type'),
+                'status' => $r->status,
+                'field' => Format::field($r->fmt_tenid),
+                'applied_at' => $r->applied_at,
+                'granted_at' => $r->granted_at,
+                'ends_at' => $r->ends_at,
+                'area_ha' => $r->area_ha !== null ? round((float) $r->area_ha, 1) : null,
+                'group' => match (true) {
+                    ! $live => null,
+                    $ends->lt($today) => 'past_expiry',
+                    $ends->lt($today->addMonths(12)) => 'expiring',
+                    default => null,
+                },
+                'expires_90d' => $live && $ends->gte($today) && $ends->lte($today->addDays(90)),
+            ];
+        }, DB::select(
+            'select fmt_tenid, type, type_code, status, applied_at, granted_at, ends_at, area_ha from tenements
+             where pw_holder_text(holders) like ? and ? = any(pw_slugs(holders))
+             order by applied_at desc nulls last, fmt_tenid',
+            ["%$slug%", $slug]
+        ));
+    }
+
+    /**
+     * Applications (by application date, whether the tenement is still on
+     * the register or now dead) and deaths per month for the last 24 months
+     * in Perth, zero-filled, and the applications in the last 12 months.
+     *
+     * @return array{0: list<array{month: string, applications: int, deaths: int}>, 1: int}
+     */
+    private static function holderActivity(string $slug): array
+    {
+        $now = CarbonImmutable::now('Australia/Perth');
+        $from = $now->startOfMonth()->subMonths(23)->toDateTimeString();
+        $rows = DB::select(
+            "select tenid, 'a' as kind, applied_at as at from tenements
+              where pw_holder_text(holders) like ? and ? = any(pw_slugs(holders)) and applied_at >= ?
+             union all
+             select tenid, 'a', started_at from dead_tenements where pw_slugs(holders) @> array[?]::text[] and started_at >= ?
+             union all
+             select tenid, 'd', ended_at from dead_tenements where pw_slugs(holders) @> array[?]::text[] and ended_at >= ?",
+            ["%$slug%", $slug, $from, $slug, $from, $slug, $from]
+        );
+
+        $months = [];
+        for ($i = 23; $i >= 0; $i--) {
+            $months[$now->startOfMonth()->subMonths($i)->format('Y-m')] = ['a' => [], 'd' => []];
+        }
+        // A tenement counts once per month, and an application once in the
+        // year, even when it is both on the register and in the dead layer.
+        $yearAgo = $now->subMonths(12)->toDateTimeString();
+        $lastYear = [];
+        foreach ($rows as $r) {
+            $month = substr($r->at, 0, 7);
+            if (isset($months[$month])) {
+                $months[$month][$r->kind][$r->tenid] = true;
+            }
+            if ($r->kind === 'a' && $r->at >= $yearAgo) {
+                $lastYear[$r->tenid] = true;
+            }
+        }
+
+        return [array_map(
+            fn ($month, $m) => ['month' => $month, 'applications' => count($m['a']), 'deaths' => count($m['d'])],
+            array_keys($months), $months,
+        ), count($lastYear)];
+    }
+
+    /**
+     * The holder's tenements as a GeoJSON FeatureCollection for the map's
+     * focus mode, and their bounding box. A holder with nothing live or
+     * pending gets their latest 1,000 dead tenements instead.
+     *
+     * @return array{features: array, bbox: ?array}
+     */
+    private static function holderFocus(string $slug, bool $dead): array
+    {
+        $rows = $dead ? DB::select(
+            "select fmt_tenid, 'DEAD' as status, split_part(fmt_tenid, ' ', 1) as type_code,
+                    ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.0005), 5) as geojson,
+                    ST_XMin(geom) as w, ST_YMin(geom) as s, ST_XMax(geom) as e, ST_YMax(geom) as n
+             from (select distinct on (tenid) fmt_tenid, geom, ended_at from dead_tenements
+                   where pw_slugs(holders) @> array[?]::text[] and geom is not null
+                   order by tenid, ended_at desc) d
+             order by ended_at desc limit 1000",
+            [$slug]
+        ) : DB::select(
+            'select fmt_tenid, status, type_code,
+                    ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.0002), 5) as geojson,
+                    ST_XMin(geom) as w, ST_YMin(geom) as s, ST_XMax(geom) as e, ST_YMax(geom) as n
+             from tenements where pw_holder_text(holders) like ? and ? = any(pw_slugs(holders)) and geom is not null',
+            ["%$slug%", $slug]
+        );
+
+        return [
+            'features' => ['type' => 'FeatureCollection', 'features' => array_map(fn ($r) => [
+                'type' => 'Feature',
+                'geometry' => json_decode($r->geojson),
+                'properties' => [
+                    'fmt_tenid' => trim($r->fmt_tenid), 'slug' => Slug::make($r->fmt_tenid),
+                    'status' => $r->status, 'type_code' => $r->type_code,
+                ],
+            ], $rows)],
+            'bbox' => $rows ? [
+                min(array_column($rows, 'w')), min(array_column($rows, 's')),
+                max(array_column($rows, 'e')), max(array_column($rows, 'n')),
+            ] : null,
+        ];
     }
 }
