@@ -23,7 +23,7 @@ MIN_ROW_RATIO = 0.95
 
 # Tables the map and its cards read, refilled from tonight's snapshot in this
 # order, each by sql/<table>.sql inside the snapshot transaction.
-MAP_TABLES = ("coverage_lowzoom", "recent_changes")
+MAP_TABLES = ("coverage_lowzoom", "freed_ground", "recent_changes")
 
 
 class IngestAborted(RuntimeError):

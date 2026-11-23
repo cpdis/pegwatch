@@ -1,11 +1,15 @@
 """The map and card tables (coverage, freed ground, no recorded tenement,
 recent changes) and the blocking rule they share with the diff."""
+import datetime as dt
 import json
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from pegwatch_ingest import db
-from test_diff import DSN, conn, events, night1, runner, square, stage, ten  # noqa: F401
+from test_diff import DSN, EXTRACT_2, conn, dead, events, night1, runner, square, stage, ten  # noqa: F401
+
+AWST = ZoneInfo("Australia/Perth")
 
 
 def go():
@@ -79,3 +83,41 @@ def test_recent_changes_keep_each_tenements_latest_unreversed_event(conn):
     stage(conn, night(changed=True)); go()
     assert dict(conn.execute("select tenid, event_type from recent_changes").fetchall()) == {
         "E 01/7": "holder_change"}  # E 01/1's reversed death is not its latest change
+
+
+def days_ago(n):
+    """A SLIP date n days back: the local date encoded as UTC midnight."""
+    day = dt.datetime.now(AWST).date() - dt.timedelta(days=n)
+    return int(dt.datetime.combine(day, dt.time(), dt.UTC).timestamp() * 1000)
+
+
+def freed(conn):
+    return {r[0]: r[1:] for r in conn.execute(
+        "select fmt_tenid, reason, holder, round(uncovered_ha::numeric) from freed_ground")}
+
+
+def test_freed_ground_is_recent_dead_ground_nothing_blocks(conn):
+    one = round(conn.execute("select ST_Area(ST_GeomFromGeoJSON(%s)::geography) / 1e4",
+                             (json.dumps(square(120.1, -30)),)).fetchone()[0])
+    old_l = ten("L 01/13", "LIVE", ["K LTD"], square(121.3, -30), "MISCELLANEOUS LICENCE")
+    stage(conn, night1() + [old_l]); go()
+    gone = ("P 01/2", "E 01/3", "E 01/10", "L 01/13")
+    spl = special("P 01/20-S", square(120.10, -30), extract=EXTRACT_2)
+    stage(conn, [f for f in night1() if f["properties"]["fmt_tenid"] not in gone] + [spl],
+          dead_rows=[dead("P 01/2", "Surrendered", square(120.10, -30), ended=days_ago(3)),
+                     dead("E 01/3", "Withdrawn", square(120.20, -30), ended=days_ago(3)),
+                     dead("L 01/13", "Expired", square(121.3, -30), ended=days_ago(3)),
+                     dead("E 99/1", "Expired", square(122, -30), ended=days_ago(120))])
+    go()
+    # P 01/2: only a special prospecting licence over it. E 01/10: only a miscellaneous
+    # licence, and not in the DEAD layer yet. E 01/3 stays under E 01/4; a dead L freed
+    # nothing; E 99/1 died too long ago.
+    assert freed(conn) == {"P 01/2": ("Surrendered", "SOMEONE PTY LTD", one),
+                           "E 01/10": (None, "J LTD", one)}
+
+    pegged = ten("E 01/30", "PENDING", ["NEW PTY LTD"], square(120.10, -30, w=0.007), extract=EXTRACT_2)
+    stage(conn, [f for f in night1() if f["properties"]["fmt_tenid"] not in gone] + [spl, pegged]); go()
+    assert freed(conn)["P 01/2"][2] == round(0.3 * one)  # the new application took 70%
+    pegged["geometry"] = square(120.10, -30)
+    stage(conn, [f for f in night1() if f["properties"]["fmt_tenid"] not in gone] + [spl, pegged]); go()
+    assert "P 01/2" not in freed(conn)

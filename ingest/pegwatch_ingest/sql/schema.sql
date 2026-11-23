@@ -216,6 +216,18 @@ create table if not exists coverage_lowzoom (
 );
 select pw_ensure_index('coverage_lowzoom_geom_idx', 'coverage_lowzoom using gist (geom)');
 
+-- Ground that tenements dead in the last 90 days left with no blocking tenement over it.
+create table if not exists freed_ground (
+  tenid        text not null,
+  fmt_tenid    text,
+  ended_at     timestamp,           -- AWST wall clock
+  reason       text,                -- null until the DEAD layer publishes the death
+  holder       text,                -- first holder, by name only
+  uncovered_ha double precision not null,
+  geom         geometry(MultiPolygon, 4326) not null
+);
+select pw_ensure_index('freed_ground_geom_idx', 'freed_ground using gist (geom)');
+
 -- The hover card's "Changed 2 days ago: holder change".
 create table if not exists recent_changes (
   tenid       text primary key,
