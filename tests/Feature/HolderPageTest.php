@@ -184,6 +184,40 @@ class HolderPageTest extends TestCase
             ->assertSee(route('watch.start', ['holder' => 'acme-gold-pty-ltd']), false);
     }
 
+    public function test_entities_that_share_a_name_are_a_labelled_name_match_with_a_distinct_count(): void
+    {
+        self::seedRegister();
+        DB::insert(
+            "insert into tenements (tenid, fmt_tenid, type, type_code, status, holders, holder_is_company, area_ha, extract_at, geom) values
+               ('E  1700001', 'E 17/1', 'EXPLORATION LICENCE', 'E', 'LIVE', '{\"ACME GOLD (WEST) PTY LTD\"}', '{t}', 10, now(), ?::geometry),
+               ('E  1700002', 'E 17/2', 'EXPLORATION LICENCE', 'E', 'LIVE', '{\"ACME GOLD (WEST) PTY LTD\",\"ACME GOLD PTY LTD\"}', '{t,t}', 10, now(), ?::geometry),
+               ('E  1700003', 'E 17/3', 'EXPLORATION LICENCE', 'E', 'LIVE', '{\"ACME, JOHN\"}', '{f}', 10, now(), ?::geometry),
+               ('E  1700004', 'E 17/4', 'EXPLORATION LICENCE', 'E', 'LIVE', '{\"ACMEX PTY LTD\"}', '{t}', 10, now(), ?::geometry)",
+            [self::square(123.0), self::square(123.1), self::square(123.2), self::square(123.3)]
+        );
+
+        $this->assertSame('acme', Register::nameStem('ACME GOLD (WEST) PTY LTD'));
+        $this->assertSame('northern-star', Register::nameStem('NORTHERN STAR RESOURCES LTD'));
+        $this->assertNull(Register::nameStem('WESTERN MINING CORPORATION LTD'));
+
+        // Companies only (not ACME, JOHN), whole words (not ACMEX), joint E 17/2 once.
+        $m = Register::holder('acme-gold-pty-ltd')['matches'];
+        $this->assertSame(['acme', 'ACME', 6], [$m['stem'], $m['label'], $m['tenements']]);
+        $this->assertSame(['acme-gold-pty-ltd', 'acme-gold-west-pty-ltd'], array_column($m['entities'], 'slug'));
+        $this->assertNull(Register::holder('smith-john')['matches']);
+
+        $this->get('/holders/acme-gold-pty-ltd')->assertSee('One of 2 entities matching “ACME”')
+            ->assertSee('a name match, not a corporate group');
+        $this->get('/holders/matching/acme')->assertOk()
+            ->assertSee('Entities matching “ACME”')
+            ->assertSee('6 distinct live or pending tenements')
+            ->assertSee('not ownership')
+            ->assertSeeInOrder(['ACME GOLD PTY LTD', 'ACME GOLD (WEST) PTY LTD'])
+            ->assertDontSee('ACME, JOHN');
+        $this->get('/holders/matching/acmex')->assertNotFound();
+        $this->get('/holders/matching/ACME%25')->assertNotFound();
+    }
+
     public function test_unknown_and_malformed_slugs_are_not_found(): void
     {
         self::seedRegister();

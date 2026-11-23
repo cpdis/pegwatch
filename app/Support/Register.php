@@ -229,6 +229,7 @@ class Register
             'focus' => $focus['features'],
             'focus_dead' => $rows === [],
             'bbox' => $focus['bbox'],
+            'matches' => $who->is_company ? self::nameMatches(self::nameStem($who->name)) : null,
             'events' => self::events(['holder_slug' => $slug], 50),
         ];
     }
@@ -475,6 +476,21 @@ class Register
 
     // d-holders: holder portfolio, name-match groups, search ranking and places.
 
+    /** Trailing words that say what kind of company it is, not whose. */
+    private const NAME_TAIL = [
+        'PTY', 'PROPRIETARY', 'LTD', 'LIMITED', 'NL', 'INC', 'CORP', 'CORPORATION', 'CO', 'COMPANY', 'PLC', 'LLC',
+        'THE', 'AND', 'AUSTRALIA', 'AUSTRALIAN', 'AUST', 'WA', 'RESOURCES', 'MINING', 'MINERALS', 'MINES', 'METALS',
+        'GOLD', 'EXPLORATION', 'EXPLORATIONS', 'OPERATIONS', 'HOLDINGS', 'GROUP', 'PROJECTS', 'VENTURES',
+        'INVESTMENTS', 'NOMINEES', 'ENTERPRISES',
+    ];
+
+    /** One-word stems too common to say anything about who owns a company. */
+    private const GENERIC_STEMS = [
+        'north', 'northern', 'south', 'southern', 'east', 'eastern', 'west', 'western', 'central', 'great', 'new',
+        'golden', 'royal', 'united', 'general', 'national', 'international', 'pacific', 'global', 'first', 'black',
+        'red', 'blue', 'white', 'green', 'silver', 'iron', 'mount', 'mt', 'lake',
+    ];
+
     /**
      * A holder's live and pending tenements, newest application first, with
      * their expiry state from today in Perth: past expiry but still live,
@@ -602,6 +618,71 @@ class Register
                 min(array_column($rows, 'w')), min(array_column($rows, 's')),
                 max(array_column($rows, 'e')), max(array_column($rows, 'n')),
             ] : null,
+        ];
+    }
+
+    /**
+     * The part of a company name that related entities share: "NORTHERN STAR
+     * (KLV) PTY LTD" and "NORTHERN STAR RESOURCES LTD" both give
+     * "northern-star". Null when nothing distinctive is left.
+     */
+    public static function nameStem(string $name): ?string
+    {
+        $words = preg_split('/[^A-Z0-9]+/', strtoupper(explode('(', $name)[0]), -1, PREG_SPLIT_NO_EMPTY);
+        while ($words && in_array(end($words), self::NAME_TAIL, true)) {
+            array_pop($words);
+        }
+        $stem = strtolower(implode('-', $words));
+
+        return strlen($stem) < 3 || in_array($stem, self::GENERIC_STEMS, true) ? null : $stem;
+    }
+
+    /**
+     * Companies with live or pending tenements whose names start with a stem
+     * ("Entities matching NORTHERN STAR"), and how many distinct tenements
+     * they hold between them, so joint tenements count once. The register
+     * has no parent-company field, so this is a name match and says so.
+     * Null unless two or more entities match.
+     */
+    public static function nameMatches(?string $stem): ?array
+    {
+        if ($stem === null || $stem === '' || Slug::make($stem) !== $stem) {
+            return null;
+        }
+        $entities = DB::select(
+            "select slug, (array_agg(name order by n desc, name))[1] as name, sum(live) as live, sum(pending) as pending
+             from (select h.name, pw_slug(h.name) as slug, count(*) as n,
+                          count(*) filter (where t.status = 'LIVE') as live,
+                          count(*) filter (where t.status = 'PENDING') as pending
+                   from tenements t
+                   cross join lateral unnest(t.holders, t.holder_is_company) as h(name, is_company)
+                   where pw_holder_text(t.holders) like ? and h.is_company
+                   group by h.name) m
+             where slug = ? or slug like ?
+             group by slug order by sum(n) desc, slug",
+            ["%$stem%", $stem, "$stem-%"]
+        );
+        if (count($entities) < 2) {
+            return null;
+        }
+        $distinct = DB::selectOne(
+            'select count(*) as n, sum(area_ha) as area_ha from tenements t
+             where pw_holder_text(t.holders) like ? and exists (
+               select 1 from unnest(t.holders, t.holder_is_company) as h(name, is_company)
+               where h.is_company and (pw_slug(h.name) = ? or pw_slug(h.name) like ?))',
+            ["%$stem%", $stem, "$stem-%"]
+        );
+        // The label is the stem as the register spells it in the largest entity's name.
+        $words = preg_split('/[^A-Za-z0-9]+/', $entities[0]->name, -1, PREG_SPLIT_NO_EMPTY);
+
+        return [
+            'stem' => $stem,
+            'label' => implode(' ', array_slice($words, 0, substr_count($stem, '-') + 1)),
+            'tenements' => (int) $distinct->n,
+            'area_ha' => round((float) $distinct->area_ha),
+            'entities' => array_map(fn ($r) => [
+                'name' => $r->name, 'slug' => $r->slug, 'live' => (int) $r->live, 'pending' => (int) $r->pending,
+            ], $entities),
         ];
     }
 }

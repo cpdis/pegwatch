@@ -157,6 +157,7 @@ new class extends Component {
         $chart = array_map(fn ($m) => ['date' => $m['month'].'-01', 'applications' => $m['applications'], 'deaths' => $m['deaths']], $months);
         $quiet = array_sum(array_column($months, 'applications')) + array_sum(array_column($months, 'deaths')) === 0;
         $deadSince = $data['dead_since'] && $data['dead_since'] > $months[0]['month'].'-01' ? $data['dead_since'] : null;
+        $matches = $data['matches'];
     @endphp
 
     <x-eyebrow>{{ $isCompany ? __('Holder · Company') : __('Holder · Individual') }}</x-eyebrow>
@@ -183,6 +184,12 @@ new class extends Component {
         {{ trans_choice('{0} No applications in the last 12 months.|{1} 1 application in the last 12 months.|[2,*] :n applications in the last 12 months.', $s['applied_12m'], ['n' => number_format($s['applied_12m'])]) }}
         @unless ($isCompany) {{ __('Shown by name only, as on the public register.') }} @endunless
     </flux:text>
+    @if ($matches)
+        <flux:text class="mt-1 text-sm">
+            <flux:link :href="route('holders.matching', $matches['stem'])" wire:navigate>{{ __('One of :n entities matching “:name”', ['n' => count($matches['entities']), 'name' => $matches['label']]) }}</flux:link>
+            · {{ __(':n distinct tenements between them', ['n' => number_format($matches['tenements'])]) }} · {{ __('a name match, not a corporate group') }}
+        </flux:text>
+    @endif
     @if (Route::has('watch.start'))
         <flux:text class="mt-1 text-xs">{{ __('Watching one holder is free.') }}</flux:text>
     @endif

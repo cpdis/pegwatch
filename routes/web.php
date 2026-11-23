@@ -12,6 +12,9 @@ Route::livewire('activity', 'pages::activity')->name('activity');
 Route::livewire('tenements/{slug}', 'pages::tenements.show')->name('tenements.show');
 Route::livewire('holders/{slug}', 'pages::holders.show')->name('holders.show');
 
+// d-holders: companies whose names match ("Entities matching NORTHERN STAR").
+Route::livewire('holders/matching/{slug}', 'pages::holders.matching')->name('holders.matching');
+
 Route::livewire('digest', 'pages::digest.index')->name('digest');
 Route::livewire('digest/confirm/{token}', 'pages::digest.confirm')->name('digest.confirm');
 Route::livewire('digest/unsubscribe/{token}', 'pages::digest.unsubscribe')->name('digest.unsubscribe');
