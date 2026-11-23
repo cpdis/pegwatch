@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from pegwatch_ingest import db
+from pegwatch_ingest.layers import FILE_NOTATION, SECTION_19
 from test_diff import DSN, EXTRACT_2, conn, dead, events, night1, runner, square, stage, ten  # noqa: F401
 
 AWST = ZoneInfo("Australia/Perth")
@@ -121,3 +122,35 @@ def test_freed_ground_is_recent_dead_ground_nothing_blocks(conn):
     pegged["geometry"] = square(120.10, -30)
     stage(conn, [f for f in night1() if f["properties"]["fmt_tenid"] not in gone] + [spl, pegged]); go()
     assert "P 01/2" not in freed(conn)
+
+
+def test_no_recorded_tenement_is_land_nothing_blocks_or_closes(conn):
+    def land(kind_id, geom):
+        return {"type": "Feature", "geometry": geom, "properties": {
+            "objectid": 1, "land_id": kind_id, "fmt_land_i": kind_id, "type": "x", "status": "ACTIVE",
+            "purpose": "x", "official_name": "x", "official_n": "x", "startdate": None, "enddate": None,
+            "extract_date": EXTRACT_2, "extract_da": EXTRACT_2}}
+
+    def covered(conn, x, y):
+        return conn.execute("select exists (select 1 from no_recorded_tenement where ST_Intersects("
+                            "geom, ST_Point(%s, %s, 4326)))", (x + 0.005, y + 0.005)).fetchone()[0]
+
+    conn.execute("insert into wa_land select ST_Multi(ST_MakeEnvelope(119.9, -30.1, 121.6, -29.9, 4326))")
+    conn.commit()
+    extra = [special("P 01/20-S", square(121.2, -30)),
+             ten("L 01/14", "LIVE", ["K LTD"], square(121.3, -30), "MISCELLANEOUS LICENCE")]
+    stage(conn, night1() + extra)
+    db.load_features(conn, SECTION_19, [land("S19 1", square(121.4, -30))])
+    db.load_features(conn, FILE_NOTATION, [land("FNA 1", square(121.5, -30))])
+    go()
+    assert not covered(conn, 120.0, -30)       # a pending exploration licence
+    assert not covered(conn, 120.1, -30)       # a live prospecting licence
+    assert covered(conn, 121.2, -30)           # a special prospecting licence does not block
+    assert covered(conn, 121.3, -30)           # nor does a miscellaneous licence
+    assert not covered(conn, 121.4, -30)       # s19 closes land to mining
+    assert covered(conn, 121.5, -30)           # a file notation is a notation
+    assert covered(conn, 121.0, -30)           # nothing there
+    assert not covered(conn, 122.0, -30)       # off the land
+    area = conn.execute("select sum(ST_Area(geom)) from no_recorded_tenement").fetchone()[0]
+    # Eight squares of night 1 hold blocking tenements (two hold two each); one more is s19.
+    assert area == pytest.approx(1.7 * 0.2 - 9 * 0.0001, rel=1e-9)

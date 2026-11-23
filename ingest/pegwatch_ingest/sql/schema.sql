@@ -228,6 +228,10 @@ create table if not exists freed_ground (
 );
 select pw_ensure_index('freed_ground_geom_idx', 'freed_ground using gist (geom)');
 
+-- WA land with no blocking tenement over it and not closed to mining.
+create table if not exists no_recorded_tenement (geom geometry(MultiPolygon, 4326) not null);
+select pw_ensure_index('no_recorded_tenement_geom_idx', 'no_recorded_tenement using gist (geom)');
+
 -- The hover card's "Changed 2 days ago: holder change".
 create table if not exists recent_changes (
   tenid       text primary key,

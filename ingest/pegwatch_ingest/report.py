@@ -82,7 +82,7 @@ def markdown(s: dict) -> str:
     if built:
         out += ["", "| Map table | Rows | Seconds |", "| --- | ---: | ---: |"]
         out += [f"| {t} | not rebuilt, kept last run's rows: {b['error'][:160]} | |" if "error" in b
-                else f"| {t} | {b['rows']:,} | {b['seconds']} |" for t, b in built.items()]
+                else f"| {t} | {b['rows']:,} | {b['seconds']} |" for t, b in sorted(built.items())]
     if run["status"] == "baseline":
         out += ["", "Baseline run: no previous snapshot, so no events."]
         return "\n".join(out + _history(s)) + "\n"
