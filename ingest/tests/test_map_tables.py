@@ -54,3 +54,28 @@ def test_a_failing_map_table_keeps_last_nights_rows(conn, monkeypatch):
     assert s["run"]["status"] == "ok"
     assert "division by zero" in s["run"]["notes"]["map_tables"]["coverage_lowzoom"]["error"]
     assert conn.execute("select count(*) from coverage_lowzoom").fetchone()[0] == before > 0
+
+
+def test_recent_changes_keep_each_tenements_latest_unreversed_event(conn):
+    def night(*, without=(), changed=False):
+        out = [f for f in night1() if f["properties"]["fmt_tenid"] not in without]
+        for f in out:
+            p = f["properties"]
+            if changed and p["fmt_tenid"] == "E 01/7":
+                p["tenstatus"], p["holder1"] = "LIVE", "NEW LTD"  # a grant and a transfer in one run
+            if changed and p["fmt_tenid"] == "E 01/8":
+                p["holder1"] = "W PTY LTD"
+        return out
+
+    stage(conn, night()); go()
+    stage(conn, night(without=("E 01/1",), changed=True)); go()  # E 01/1 dies...
+    stage(conn, night(changed=True)); go()                        # ...and is back: the death is reversed
+    latest = dict(conn.execute("select tenid, event_type from recent_changes").fetchall())
+    assert latest == {"E 01/1": "reappeared", "E 01/7": "holder_change", "E 01/8": "holder_change"}
+
+    conn.execute("update tenement_events set created_at = created_at - interval '31 days'"
+                 " where tenid in ('E 01/1', 'E 01/8') and event_type <> 'death'")
+    conn.commit()
+    stage(conn, night(changed=True)); go()
+    assert dict(conn.execute("select tenid, event_type from recent_changes").fetchall()) == {
+        "E 01/7": "holder_change"}  # E 01/1's reversed death is not its latest change

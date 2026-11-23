@@ -215,3 +215,10 @@ create table if not exists coverage_lowzoom (
   geom       geometry(MultiPolygon, 4326) not null
 );
 select pw_ensure_index('coverage_lowzoom_geom_idx', 'coverage_lowzoom using gist (geom)');
+
+-- The hover card's "Changed 2 days ago: holder change".
+create table if not exists recent_changes (
+  tenid       text primary key,
+  event_type  text not null,
+  detected_at timestamptz not null   -- when the run that found it started
+);
