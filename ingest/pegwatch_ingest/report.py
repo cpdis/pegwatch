@@ -71,6 +71,10 @@ def markdown(s: dict) -> str:
                    + (f"; missing: {', '.join(n['missing'])}" if n["missing"] else ""))
     elif n:
         out.append(f"- Mining Notices cross-check failed: {n['error']}")
+    ref = (run.get("notes") or {}).get("boundaries")
+    if ref:
+        out.append(f"- ABS boundaries refreshed: {ref['places']:,} places, {ref['land_pieces']:,} land pieces"
+                   f" in {ref['seconds']}s" if "error" not in ref else f"- ABS boundaries not refreshed: {ref['error']}")
     out += ["", "| Layer | Rows | Extract |", "| --- | ---: | --- |"]
     out += [f"| {l['layer_code']} {l['layer_key']} | {l['fetched_rows']:,} | {_fmt(l['max_extract'])} |"
             for l in s["layers"]]

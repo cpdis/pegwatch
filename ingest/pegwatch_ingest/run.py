@@ -12,7 +12,7 @@ from pathlib import Path
 
 import psycopg
 
-from . import db, notices, report
+from . import boundaries, db, notices, report
 from .layers import DEAD, NIGHTLY, TENEMENTS, Layer
 from .slip import SlipClient
 
@@ -82,9 +82,24 @@ def build_map_tables(conn, run_id: int) -> dict:
     return out
 
 
+def refresh_boundaries(conn, run_id: int) -> None:
+    """Reload WA land and places from the ABS. A failure keeps the old rows."""
+    try:
+        got = boundaries.refresh(conn, run_id)
+    except Exception as exc:  # reference data must never fail the ingest
+        conn.rollback()
+        log.warning("ABS boundaries not refreshed: %s", exc)
+        got = {"error": str(exc)}
+    with conn.cursor() as cur:
+        cur.execute("update ingest_runs set notes = notes || jsonb_build_object('boundaries', %s::jsonb)"
+                    " where id = %s", (json.dumps(got), run_id))
+    conn.commit()
+
+
 def run(dsn: str, dead_days: int | None, full_dead: bool, skip_fetch: bool,
         report_dir: Path | None, client: SlipClient | None = None,
-        min_row_ratio: float = MIN_ROW_RATIO, check_notices: bool = True) -> dict:
+        min_row_ratio: float = MIN_ROW_RATIO, check_notices: bool = True,
+        force_boundaries: bool = False) -> dict:
     client = client or SlipClient()
     conn = db.connect(dsn)
     db.apply_schema(conn)
@@ -93,6 +108,9 @@ def run(dsn: str, dead_days: int | None, full_dead: bool, skip_fetch: bool,
                                    "where status in ('ok', 'baseline') order by id desc limit 1")
     run_id = db.scalar(conn, "insert into ingest_runs default values returning id")
     conn.commit()
+    # Before the snapshot, so tonight's "no recorded tenement" layer has the land.
+    if force_boundaries or (not skip_fetch and boundaries.due(conn)):
+        refresh_boundaries(conn, run_id)
 
     try:
         existing = db.scalar(conn, "select count(*) from tenements")
@@ -176,13 +194,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--min-row-ratio", type=float, default=MIN_ROW_RATIO,
                    help="abort if the live layer returns fewer rows than this share of last run")
     p.add_argument("--no-notices", action="store_true", help="skip the Mining Notices RSS cross-check")
+    p.add_argument("--refresh-boundaries", action="store_true",
+                   help="reload WA land and places from the ABS now (otherwise weekly; works with --skip-fetch)")
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:
         summary = run(args.dsn, args.dead_days, args.full_dead, args.skip_fetch, args.report_dir,
-                      min_row_ratio=args.min_row_ratio, check_notices=not args.no_notices)
+                      min_row_ratio=args.min_row_ratio, check_notices=not args.no_notices,
+                      force_boundaries=args.refresh_boundaries)
     except IngestAborted as exc:
         log.error("ingest aborted: %s", exc)
         return 2

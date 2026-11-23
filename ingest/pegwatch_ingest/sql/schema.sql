@@ -234,3 +234,28 @@ create table if not exists recent_changes (
   event_type  text not null,
   detected_at timestamptz not null   -- when the run that found it started
 );
+
+-- Reference layers from the ABS boundaries (boundaries.py), refreshed weekly.
+
+-- WA land (ABS STE 2021), cut into pieces so the nightly difference stays local.
+create table if not exists wa_land (geom geometry(MultiPolygon, 4326) not null);
+select pw_ensure_index('wa_land_geom_idx', 'wa_land using gist (geom)');
+
+-- WA towns (ABS UCL 2021) and localities (ABS SAL 2021) for place search.
+create table if not exists places (
+  id   serial primary key,
+  name text not null,
+  kind text not null,                -- town | locality
+  lga  text,                         -- local government area, e.g. Kalgoorlie-Boulder
+  geom geometry(Point, 4326) not null
+);
+select pw_ensure_index('places_name_prefix_idx', 'places (lower(name) text_pattern_ops)');
+select pw_ensure_index('places_geom_idx', 'places using gist (geom)');
+-- pg_trgm ships with Postgres but may be missing; search then runs unindexed.
+do $$
+begin
+  if exists (select 1 from pg_available_extensions where name = 'pg_trgm') then
+    create extension if not exists pg_trgm;
+    perform pw_ensure_index('places_name_trgm_idx', 'places using gin (name gin_trgm_ops)');
+  end if;
+end $$;
