@@ -95,7 +95,7 @@ Visual system and global
 
 ### Key Technical Decisions
 
-- KTD1. Isolation by clone, not worktree: each workstream works in its own `git clone` of the local repo under the scratchpad, on branch `ws/<name>` from one base SHA. The integrator fetches each branch into the main checkout and merges it into `claude/project-thread-t37f2g`. The session runs in one blessed folder and must not create worktrees.
+- KTD1. Isolation: each workstream works in its own git worktree or clone, on branch `ws/<name>` from one base SHA, with its own databases and port. The integrator merges each branch into `claude/project-thread-t37f2g`. (The build moved to a cloud session on 2026-11-23, because Flux Pro installs there; the local session had no Flux licence access.)
 - KTD2. File ownership: each workstream owns the files listed in its unit; shared files (`app/Support/Register.php`, `app/Support/Format.php`, `routes/web.php`, `resources/views/pages/map.blade.php`) take additions in clearly separated methods or blocks; the integrator resolves the overlaps.
 - KTD3. The map script becomes ES modules in `resources/js/map/` during foundation: `index.js` (the Alpine component and its config), `style.js` (sources, layers, paint), `card.js` (hover and click), `url.js` (state in the URL), `controls.js` (coordinates, locate, satellite, keyboard), `draw.js` (watch-area shape). `resources/js/map.js` re-exports `index.js`. Rendering and interaction workstreams then own disjoint modules.
 - KTD4. Design tokens in `resources/css/app.css`: Flux's `--color-accent` becomes the hi-vis accent (`#ffd400`) with near-black foreground and near-black accent-content on light backgrounds; `--color-ink` (`#0b0b0c`) for the header and primary surfaces; status colours as tokens and in `Format::STATUS_COLOURS`: Live `#15803d`, Pending `#d97706`, Dead `#71717a`, Release due `#c026d3`, Restricted `#a16207`. Type colours stay; releases move off mining-lease red to the release magenta with a hatch.
@@ -135,7 +135,7 @@ Visual system and global
 ### U0. Environment and base branch
 
 - Goal: a local stack every workstream can test and screenshot against.
-- Approach: PostgreSQL 17 and PostGIS from Homebrew, run from a scratch data directory on a private port; a seed database from a real SLIP ingest with `--full-dead`, then a second run against a perturbed snapshot so every event type exists; Flux Pro installed with the licence read through `op run`; `claude/project-thread-t37f2g` cut from `main` after the PR merges.
+- Approach: PostgreSQL with PostGIS; a seed database from a real SLIP ingest with `--full-dead`, then a second run against a perturbed snapshot so every event type exists (`docs/plans/2026-11-23-001-briefs/seed.md`); Flux Pro installed through the environment's credentials; `claude/project-thread-t37f2g` already carries `main` (PRs 7 to 10) and the foundation commit.
 - Verification: `php artisan test`, `vendor/bin/pint --test`, `npm run build` and ingest `pytest` pass on the base.
 
 ### U1. Foundation
@@ -228,4 +228,4 @@ Visual system and global
 
 ## Appendix A: item detail
 
-The full item detail (change, why, priority, effort, source) is in the proposal doc "Pegwatch design and UX proposals" (https://claude.ai/artifact/E7YYhScDSDphzTFdJaeRTB), tabs "Proposals" (per-screen tables) and "Build specs" (Specs 1 to 5 and Gemini's notes). Workstream briefs quote the rows they own.
+The full item detail (change, why, priority, effort, source) is in the proposal doc "Pegwatch design and UX proposals" (https://claude.ai/artifact/E7YYhScDSDphzTFdJaeRTB). The workstream briefs in `docs/plans/2026-11-23-001-briefs/` carry everything an executor needs without the doc: `common.md` (rules for every workstream), `contracts.md` (events, routes, tables, tile fields between workstreams), `build-specs.md` (Specs 1 to 5 and Gemini's notes), `seed.md` (seed data recipe), and one brief per workstream (`a-render.md` to `h-data.md`).
