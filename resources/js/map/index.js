@@ -5,7 +5,7 @@
 import { BASEMAP, BLANK_STYLE, DEFAULT_LAYERS, EMPTY, LAYER_GROUPS, WA_BOUNDS, addLayers, attachRendering } from './style.js';
 import { attachCard } from './card.js';
 import { addControls, attachControls } from './controls.js';
-import { attachUrlState } from './url.js';
+import { attachUrlState, layersFrom, parseHash } from './url.js';
 import { attachDraw } from './draw.js';
 import { circlePolygon } from './util.js';
 
@@ -15,26 +15,30 @@ export default function tenementMap(config = {}) {
     const cleanups = [];
     // The full map page (no bounds of its own), as opposed to a map embedded in a tenement or holder page.
     const full = config.url ?? !config.bounds;
+    const fromUrl = full ? parseHash(window.location.hash) : null;
+    const defaults = { ...DEFAULT_LAYERS, ...(config.layers ?? {}) };
 
     return {
-        layers: { ...DEFAULT_LAYERS, ...(config.layers ?? {}) },
+        layers: fromUrl?.layers ? layersFrom(fromUrl.layers, defaults) : { ...defaults },
         highlight: config.highlight ?? null,
         markers: config.markers ?? [],
         circle: config.circle ?? null,
         hovered: null,
         pick: config.pick ?? false,
-        /** Slug of the tenement the pinned card shows. */
+        /** Slug of the tenement the pinned card shows (written to the URL as `sel`). */
         selection: null,
 
         async init() {
             // MapLibre is about 1 MB, so only pages with a map load it.
             const [{ default: maplibregl }] = await Promise.all([import('maplibre-gl'), import('maplibre-gl/dist/maplibre-gl.css')]);
             if (!this.$refs.map?.isConnected) return;
+            const view = fromUrl
+                ? { center: [fromUrl.lng, fromUrl.lat], zoom: fromUrl.zoom }
+                : { bounds: config.bounds ?? WA_BOUNDS, fitBoundsOptions: { padding: 40, maxZoom: 13 } };
             map = new maplibregl.Map({
                 container: this.$refs.map,
                 style: BASEMAP,
-                bounds: config.bounds ?? WA_BOUNDS,
-                fitBoundsOptions: { padding: 40, maxZoom: 13 },
+                ...view,
                 attributionControl: { compact: true, customAttribution: '© State of WA (DMPE), CC BY 4.0' },
             });
             addControls(map, maplibregl, this);
@@ -54,7 +58,7 @@ export default function tenementMap(config = {}) {
                 attachRendering(map, this);
                 const card = attachCard(map, this);
                 cleanups.push(card.destroy, attachControls(map, this, card, { full }));
-                attachUrlState(map, this);
+                if (full) cleanups.push(attachUrlState(map, this, card, defaults)); // embedded maps leave the URL alone
                 attachDraw(map, this);
                 ready = true;
                 this.sync();
