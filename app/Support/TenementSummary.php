@@ -91,7 +91,16 @@ class TenementSummary
                     ($t['applied_at'] ? ' on '.$date($t['applied_at']) : '').$granted.' and '.$ended.$after.'.'.$sentence($size)];
 
             default:
-                $since = $t['granted_at'] ? ' since '.$date($t['granted_at']) : '';
+                // "Since" the grant only while no transfer has been seen; after one, since the transfer.
+                $changed = $t['holder_changed_at'] ?? null;
+                $since = match (true) {
+                    $changed !== null => ' since a change of holder seen '.Format::awst($changed, false),
+                    (bool) $t['granted_at'] => ' since '.$date($t['granted_at']),
+                    default => '',
+                };
+                if ($changed !== null && $t['granted_at']) {
+                    $type .= ' granted '.$date($t['granted_at']).',';
+                }
                 $expiry = match (true) {
                     $t['ends_at'] === null => '',
                     self::isPast($t['ends_at'], $now) => ' The expiry date passed on '.$date($t['ends_at']).', but the register still lists it as live.',

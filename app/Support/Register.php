@@ -106,7 +106,7 @@ class Register
             'type' => $row->type,
             'holders' => $holders,
             'special' => self::isSpecial($t?->special_ind, $fmt),
-            'area_ha' => $row->area_ha !== null ? round((float) $row->area_ha, 1) : null,
+            'area_ha' => $row->area_ha !== null ? (float) $row->area_ha : null, // rounded once, for display
             'extract_at' => $row->extract_at,
             'granted_at' => $row->granted_at,
         ] + ($t ? [
@@ -117,6 +117,11 @@ class Register
             'area_unit' => $t->area_unit,
             'applied_at' => $t->applied_at,
             'ends_at' => $t->ends_at,
+            // The register has no transfer date: the extract that first showed the latest holder change.
+            'holder_changed_at' => DB::scalar(
+                "select max(extract_at) from tenement_events
+                 where tenid = ? and event_type = 'holder_change' and not jsonb_exists(details, 'reversed_by_run')", [$tenid]
+            ),
             'dead' => null,
         ] : [
             // The dead layer carries no type code; the ID's letters are the same thing.
@@ -404,7 +409,7 @@ class Register
             return '?';
         }
         try {
-            return CarbonImmutable::parse($ts)->setTimezone('Australia/Perth')->format('j M Y H:i').' AWST';
+            return CarbonImmutable::parse($ts)->setTimezone('Australia/Perth')->format('j M Y, g:ia').' AWST';
         } catch (\Throwable) {
             return $ts;
         }

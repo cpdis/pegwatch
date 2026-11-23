@@ -235,6 +235,23 @@ class WatchFlowTest extends TestCase
         $this->assertEqualsCanonicalizing([$keep->email, 'new@example.com'], User::pluck('email')->all());
     }
 
+    public function test_a_link_only_account_that_changes_its_email_is_not_pruned(): void
+    {
+        // Link-only (no password), a month old, with a confirmed watch.
+        $user = User::factory()->withoutPassword()->create(['email' => 'pat@example.com', 'created_at' => now()->subDays(30)]);
+        $area = $user->watchAreas()->create(['name' => 'Leonora', 'kind' => 'circle', 'latitude' => -28.88, 'longitude' => 121.33, 'radius_km' => 10, 'event_types' => ['death']]);
+        $area->forceFill(['created_at' => now()->subDays(30), 'confirmed_at' => now()->subDays(30)])->save();
+
+        // A new address is unverified until a link to it is pressed.
+        Livewire::actingAs($user)->test('pages::settings.profile')
+            ->set('email', 'pat@newmail.example')->call('updateProfileInformation')->assertHasNoErrors();
+        $this->travel(WatchArea::CONFIRM_DAYS + 2)->days();
+        Artisan::call('model:prune');
+
+        $this->assertDatabaseHas('users', ['id' => $user->id]);
+        $this->assertDatabaseHas('watch_areas', ['id' => $area->id]);
+    }
+
     public function test_the_map_page_carries_the_watch_panel(): void
     {
         $this->get('/')->assertOk()->assertSee('data-watch-panel', false)->assertSee('Watch this area');

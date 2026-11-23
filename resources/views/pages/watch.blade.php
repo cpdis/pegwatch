@@ -61,7 +61,7 @@ new #[Title('Watch an area')] class extends Component {
                  bounds: @js($bounds),
                  highlight: @js($highlight),
              })"
-             x-on:watch-shape.window="drawn = true; circle = null"
+             x-on:watch-shape.window="drawn = true; if ($event.detail.kind !== 'circle') circle = null"
              x-on:watch-start.window="if (! drawn && $event.detail.center) { circle = { center: $event.detail.center, radiusKm: $event.detail.radiusKm ?? 10 }; const r = (circle.radiusKm / 111) * 1.3; fit([circle.center[0] - r / Math.cos(circle.center[1] * Math.PI / 180), circle.center[1] - r, circle.center[0] + r / Math.cos(circle.center[1] * Math.PI / 180), circle.center[1] + r]) }">
             <div x-ref="map" class="h-full w-full"></div>
         </div>

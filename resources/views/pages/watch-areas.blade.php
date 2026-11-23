@@ -293,7 +293,7 @@ new #[Title('My watches')] class extends Component {
                      })"
                      x-on:watch-area-move.window="moving = $event.detail.id; pick = true"
                      x-on:map-pick.window="if (moving) { $wire.moveCentre(moving, $event.detail.lng, $event.detail.lat); moving = null; pick = false }"
-                     x-on:watch-shape.window.debounce.400ms="drawn = true; circle = null; if (moving && $event.detail.kind === 'circle') $wire.drawn(moving, $event.detail)"
+                     x-on:watch-shape.window.debounce.400ms="drawn = true; if ($event.detail.kind !== 'circle') circle = null; if (moving && $event.detail.kind === 'circle') $wire.drawn(moving, $event.detail)"
                      x-on:watch-start.window="if (! drawn && $event.detail.center) circle = { center: $event.detail.center, radiusKm: $event.detail.radiusKm ?? 10 }"
                      x-on:watch-area-moved.window="if (! drawn) circle = $event.detail.circle; $event.detail.bounds && fit($event.detail.bounds)">
                     <div x-ref="map" class="h-full w-full"></div>

@@ -225,7 +225,7 @@ class PegwatchTest extends TestCase
                     jsonb_build_object('release_id', 'R1', 'release_at', timestamptz '2026-12-01 08:30+08'), '2026-12-01 08:30', ?::geometry)",
             [$runId, self::square(121.50, -30.80)]);
 
-        $this->get('/activity?type=release_scheduled')->assertOk()->assertSee('R1 at 1 Dec 2026 08:30 AWST');
+        $this->get('/activity?type=release_scheduled')->assertOk()->assertSee('R1 at 1 Dec 2026, 8:30am AWST');
     }
 
     public function test_malformed_query_input_is_ignored_not_a_server_error(): void

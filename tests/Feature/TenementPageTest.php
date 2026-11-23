@@ -104,6 +104,25 @@ class TenementPageTest extends TestCase
         $this->get('/tenements/m-27-518')->assertSee(route('holders.show', 'yandal-resources-limited'));
     }
 
+    public function test_a_transferred_tenement_is_held_since_the_transfer_not_the_grant(): void
+    {
+        self::tenement('E 27/726', [
+            'type' => 'EXPLORATION LICENCE', 'holders' => ['PURE GOLD PTY LTD'], 'legal_area' => 4, 'area_unit' => 'BL.',
+            'area_ha' => 1183.9, 'applied_at' => '2023-06-12 10:00:00', 'granted_at' => '2024-08-02 00:00:00',
+            'ends_at' => '2029-08-01 23:59:59',
+        ]);
+        DB::insert(
+            "insert into tenement_events (run_id, event_type, tenid, fmt_tenid, tenement_type, holders, extract_at, details)
+             values ((select max(id) from ingest_runs), 'holder_change', 'E 27/726', 'E 27/726', 'EXPLORATION LICENCE', '{\"PURE GOLD PTY LTD\"}',
+                     '2026-11-20 03:11:00+00', '{\"removed\": [\"OLD GOLD PTY LTD\"], \"added\": [\"PURE GOLD PTY LTD\"]}')"
+        );
+
+        $this->assertInOrder($this->text('/tenements/e-27-726'), [
+            'Exploration licence granted 2 Aug 2024, held by PURE GOLD PTY LTD since a change of holder seen 20 Nov 2026. Expires 1 Aug 2029',
+        ]);
+        $this->get('/tenements/e-27-726')->assertDontSee('PURE GOLD PTY LTD since 2 Aug 2024');
+    }
+
     public function test_live_page_gives_holder_since_grant_expiry_and_blocks(): void
     {
         self::tenement('E 27/726', [

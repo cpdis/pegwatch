@@ -86,8 +86,12 @@ new class extends Component {
         {{-- Dead tenements answer "is any of it free today?" straight after the headline (T8). --}}
         @if ($t['dead'] && $data['uncovered'] !== null)
             <p class="max-w-3xl rounded-lg bg-zinc-100 px-3 py-2 text-sm dark:bg-zinc-900" data-test="dead-ground">
-                <strong class="tabular-nums">{{ Format::pct($data['uncovered']) }}</strong>
-                {{ __('of this ground has no live or pending tenement over it on the register today.') }}
+                @if ((float) $data['uncovered'] < 0.005)
+                    {{ __('Live or pending tenements cover all of this ground on the register today.') }}
+                @else
+                    <strong class="tabular-nums">{{ (float) $data['uncovered'] > 0.995 ? __('All') : Format::pct($data['uncovered']) }}</strong>
+                    {{ __('of this ground has no live or pending tenement over it on the register today.') }}
+                @endif
                 <span class="text-zinc-500 dark:text-zinc-400">{{ __('L and G licences and special prospecting licences are not counted.') }}</span>
                 @if ($freedUrl)
                     <flux:link :href="$freedUrl">{{ __('See freed ground on the map') }}</flux:link>.

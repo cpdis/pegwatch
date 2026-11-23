@@ -22,7 +22,11 @@ export function filterConditions(f = {}, today = perthToday()) {
     if (f.statuses?.length) out.push(['in', ['coalesce', ['get', 'status'], ''], ['literal', f.statuses]]);
     if (f.appliedFrom) out.push(whenDetailed(['>=', ['coalesce', ['get', 'applied'], ''], f.appliedFrom]));
     if (f.appliedTo) out.push(whenDetailed(['<=', ['coalesce', ['get', 'applied'], '9999'], f.appliedTo]));
-    if (f.expiresWithinMonths) out.push(whenDetailed(['<=', ['coalesce', ['get', 'ends'], '9999'], addMonths(today, f.expiresWithinMonths)]));
+    // Same window as the panel's count: from today, so tenements already past expiry stay out.
+    if (f.expiresWithinMonths) {
+        out.push(whenDetailed(['>=', ['coalesce', ['get', 'ends'], ''], today]));
+        out.push(whenDetailed(['<', ['coalesce', ['get', 'ends'], '9999'], addMonths(today, f.expiresWithinMonths)]));
+    }
     if (f.minHa != null && f.minHa !== '') out.push(whenDetailed(['>=', ['to-number', ['get', 'ha'], 0], Number(f.minHa)]));
     if (f.maxHa != null && f.maxHa !== '') out.push(whenDetailed(['<=', ['to-number', ['get', 'ha'], 0], Number(f.maxHa)]));
     return out;

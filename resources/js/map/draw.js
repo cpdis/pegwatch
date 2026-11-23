@@ -46,7 +46,7 @@ function attachWatchCircle(map, maplibregl, component, { enabled, auto, tenement
         else raf ||= requestAnimationFrame(send);
     };
 
-    function start({ center, radiusKm, tenement: t } = {}) {
+    function start({ center, radiusKm, tenement: t, fit = false } = {}) {
         if (t?.slug) return emit({ kind: 'tenement', slug: t.slug, fmt_tenid: t.fmt_tenid });
         const c = center ?? map.getCenter().toArray();
         if (!enabled) {
@@ -75,6 +75,13 @@ function attachWatchCircle(map, maplibregl, component, { enabled, auto, tenement
             for (const m of [centre, edge]) m.on('dragend', () => update(true));
         }
         update(true);
+        // A circle much smaller than the view (25 km at state zoom is a dot) or larger than it:
+        // frame it. Only for circles placed for the user, never under a drag.
+        if ((fit || center) && (half > circle.radiusKm * 4 || half < circle.radiusKm)) {
+            const c0 = circle.center;
+            const r = circle.radiusKm;
+            map.fitBounds([offsetKm(c0, r, Math.PI)[0], offsetKm(c0, r, -Math.PI / 2)[1], offsetKm(c0, r, 0)[0], offsetKm(c0, r, Math.PI / 2)[1]], { padding: 40, duration: 0 });
+        }
     }
 
     function stop() {
@@ -88,7 +95,7 @@ function attachWatchCircle(map, maplibregl, component, { enabled, auto, tenement
     window.addEventListener('watch-start', onStart);
     window.addEventListener('watch-stop', stop);
     if (tenement) start({ tenement });
-    else if (auto) start();
+    else if (auto) start({ fit: true });
 
     return () => {
         window.removeEventListener('watch-start', onStart);

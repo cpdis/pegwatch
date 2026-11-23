@@ -83,14 +83,18 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * Accounts someone started with this address but never confirmed: no
-     * password, never verified, and no watch asked for since the last link
-     * expired. Their unconfirmed watches go with them.
+     * password, not verified, no watch ever confirmed, and no watch asked for
+     * since the last link expired. Their unconfirmed watches go with them. An
+     * account whose owner changed its address is unverified too, so a confirmed
+     * watch is what tells the two apart.
      */
     public function prunable(): Builder
     {
         $cutoff = now()->subDays(WatchArea::CONFIRM_DAYS + 1);
 
         return static::whereNull('password')->whereNull('email_verified_at')->where('created_at', '<', $cutoff)
-            ->whereDoesntHave('watchAreas', fn (Builder $q) => $q->where('created_at', '>=', $cutoff));
+            ->whereDoesntHave('watchAreas', fn (Builder $q) => $q->where(
+                fn (Builder $q) => $q->where('created_at', '>=', $cutoff)->orWhereNotNull('confirmed_at')
+            ));
     }
 }
