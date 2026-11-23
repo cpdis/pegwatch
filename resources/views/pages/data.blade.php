@@ -147,4 +147,8 @@ new #[Title('Data and disclaimer')] class extends Component {
         {{ __('and related layers on the') }}
         <flux:link href="https://public-services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Industry_and_Mining/MapServer" target="_blank" rel="noreferrer">{{ __('SLIP Industry and Mining service') }}</flux:link>.
     </flux:text>
+    <flux:text class="mt-3">
+        {{ __('Town and locality names, and the WA land outline: Australian Bureau of Statistics,') }}
+        <flux:link href="https://www.abs.gov.au/statistics/standards/australian-statistical-geography-standard-asgs-edition-3" target="_blank" rel="noreferrer">{{ __('ASGS Edition 3') }}</flux:link>{{ __(', CC BY 4.0.') }}
+    </flux:text>
 </div>
