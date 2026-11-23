@@ -5,7 +5,7 @@
 @endif
 # {{ $area->name }}
 
-{{ $describe }}. Changes on the WA tenement register@if ($extract) in the department's extract of {{ $extract }} AWST@endif.
+{{ $describe }}. {{ $extract ? __('Changes on the WA tenement register in the department\'s extract of :time AWST.', ['time' => $extract]) : __('Changes on the WA tenement register.') }}
 
 @if (\Illuminate\Support\Facades\Route::has('og.area'))
 ![{{ __('Map of :name', ['name' => $area->name]) }}]({{ \Illuminate\Support\Facades\URL::signedRoute('og.area', ['watchArea' => $area->id]) }})
@@ -32,7 +32,9 @@ Nothing in this watch changed.
 Pegwatch is a screening aid, not advice. Confirm every tenement in [TENGRAPH]({{ \App\Support\Format::TENGRAPH_URL }}) and with the Mining Registrar before you act.
 
 <x-mail::subcopy>
-You get this because you watch "{{ $area->name }}". [Stop alerts for this area]({{ $stopUrl }}) · [Manage your watches]({{ route('watch-areas.index') }})
+You get this because you watch "{{ $area->name }}".
+
+[Stop alerts for this area]({{ $stopUrl }}) · [Manage your watches]({{ route('watch-areas.index') }})
 
 Data © State of Western Australia (Department of Mines, Petroleum and Exploration), CC BY 4.0, changes made.
 </x-mail::subcopy>

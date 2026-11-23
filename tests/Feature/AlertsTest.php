@@ -157,6 +157,8 @@ class AlertsTest extends TestCase
             $this->assertStringContainsString('Part releases '.$releaseAt->format('D j M Y').', 8:30am AWST (in 9 days)', $html);
             $this->assertStringContainsString('Surrendered on 16 Nov 2026. 112 ha uncovered (93% of 120.4 ha)', $html);
             $this->assertStringContainsString('Exploration licence', $html);
+            $this->assertStringContainsString('extract of', $html);
+            $this->assertStringNotContainsString('@if', $html);
             $this->assertStringNotContainsString('EXPLORATION LICENCE', $html);
             $this->assertStringContainsString('/#map=', $html);
             $this->assertStringContainsString(e(Format::TENGRAPH_URL), $html);

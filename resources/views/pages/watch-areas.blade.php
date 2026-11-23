@@ -158,7 +158,7 @@ new #[Title('My watches')] class extends Component {
     <flux:text class="mt-1">{{ __('We email you after a night when the register changes inside a watch. Free: one area and one holder. Next check: :when.', ['when' => \App\Alerts\AlertMatcher::nextCheck()]) }}</flux:text>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-5">
-        <div class="space-y-4 lg:col-span-2">
+        <div class="min-w-0 space-y-4 lg:col-span-2">
             @foreach ($areas->concat($holders) as $w)
                 @php
                     $s = $w->shape();
@@ -280,7 +280,7 @@ new #[Title('My watches')] class extends Component {
             </section>
         </div>
 
-        <div class="space-y-4 lg:col-span-3">
+        <div class="min-w-0 space-y-4 lg:col-span-3">
             <div class="relative h-[420px] overflow-hidden rounded-lg lg:h-[520px]" x-data="{ drawn: false, moving: null }">
                 <div x-show="moving" x-cloak class="absolute start-2 top-2 z-10 rounded-md bg-ink px-3 py-1.5 text-sm font-medium text-white shadow">{{ __('Click the map to set the new centre') }}</div>
                 <div wire:ignore class="h-full w-full"
