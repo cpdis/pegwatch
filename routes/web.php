@@ -3,9 +3,9 @@
 use App\Http\Controllers\ActivityRssController;
 use App\Http\Controllers\DigestUnsubscribeController;
 use App\Http\Controllers\IngestHookController;
+use App\Http\Controllers\LoginLinkController;
 use App\Http\Controllers\OgImageController;
 use App\Http\Controllers\ReleaseIcsController;
-use App\Http\Controllers\LoginLinkController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\TileController;
 use App\Http\Controllers\WatchLinkController;

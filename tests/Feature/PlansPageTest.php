@@ -21,7 +21,7 @@ class PlansPageTest extends TestCase
     public function test_the_page_leads_with_an_alert_and_a_phone_and_answers_the_usual_questions(): void
     {
         $this->get('/pro')->assertOk()
-            ->assertSeeInOrder(['<title>', 'Plans - Pegwatch', '</title>'], false)
+            ->assertSeeInOrder(['<title>', 'Plans · Pegwatch', '</title>'], false)
             ->assertSee('An example alert email')->assertSee('Your watch on your phone')
             ->assertSee('Included')->assertDontSee('>Yes<', false)
             ->assertSee('When does my year start?')->assertSee('Can I get a refund?')

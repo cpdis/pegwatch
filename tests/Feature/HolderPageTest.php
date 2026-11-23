@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Support\Register;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -172,13 +171,9 @@ class HolderPageTest extends TestCase
             ->assertSee('Applications and deaths per month');
     }
 
-    public function test_watch_this_holder_appears_once_the_watch_flow_exists(): void
+    public function test_watch_this_holder_starts_the_watch_flow(): void
     {
         self::seedRegister();
-        $this->get('/holders/acme-gold-pty-ltd')->assertDontSee('Watch this holder');
-
-        Route::get('watch', fn () => 'ok')->name('watch.start');
-        app('router')->getRoutes()->refreshNameLookups();
 
         $this->get('/holders/acme-gold-pty-ltd')->assertSee('Watch this holder')
             ->assertSee(route('watch.start', ['holder' => 'acme-gold-pty-ltd']), false);
