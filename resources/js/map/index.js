@@ -14,7 +14,7 @@
 //   context     { locator, releases } one tenement with its surroundings (focus.js)
 //   draw        true, or { tenement: { slug, fmt_tenid } }: start the watch-area tool (draw.js)
 //
-// Window events in: map-filter, map-layers, map-fly, map-select, watch-start, watch-stop.
+// Window events in: map-filter, map-layers (with an optional `colour` mode), map-fly, map-select, watch-start, watch-stop.
 // Window events out: map-moved, watch-shape (draw.js), map-pick (on the element).
 
 import { BASEMAP, BLANK_STYLE, DEFAULT_LAYERS, EMPTY, LAYER_GROUPS, WA_BOUNDS, addLayers, attachRendering } from './style.js';
@@ -42,6 +42,8 @@ export default function tenementMap(config = {}) {
         circle: config.circle ?? null,
         hovered: null,
         pick: config.pick ?? false,
+        /** 'status' (default: prospectors first) or 'type'; style.js repaints when it changes. */
+        colourMode: config.colourMode ?? 'status',
         /** Slug of the tenement the pinned card shows (written to the URL as `sel`). */
         selection: null,
 
@@ -98,7 +100,10 @@ export default function tenementMap(config = {}) {
                 cleanups.push(() => window.removeEventListener(name, handler));
             };
             on('map-filter', (d) => filters.apply(d));
-            on('map-layers', (d) => Object.assign(this.layers, d.layers ?? {}));
+            on('map-layers', (d) => {
+                Object.assign(this.layers, d.layers ?? {});
+                if (d.colour === 'status' || d.colour === 'type') this.colourMode = d.colour;
+            });
             on('map-select', (d) => card.select(d.tenid ?? null));
             on('map-fly', (d) => {
                 if (d.bounds) map.fitBounds(d.bounds, { padding: 40, maxZoom: 14 });
