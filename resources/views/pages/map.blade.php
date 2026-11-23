@@ -36,6 +36,9 @@ new #[Layout('layouts::map'), Title('WA tenement map')] class extends Component 
      x-on:event-hover.window="hovered = $event.detail.id">
     {{-- On a phone the map comes first: the list of changes is long and would push it off the screen. --}}
     <aside class="order-2 w-full overflow-y-auto border-t border-zinc-200 p-4 md:order-1 md:h-[calc(100dvh-7.5rem)] md:w-96 md:border-e md:border-t-0 dark:border-zinc-700">
+        {{-- f-accounts: the email-first watch panel; it fills from the map's draw tool. --}}
+        <div class="mb-5"><livewire:watch-this-area compact /></div>
+
         <flux:heading size="lg" level="1">{{ __('Every WA mining tenement, live, pending and dead') }}</flux:heading>
         <flux:text class="mt-1">
             {{ number_format($totals['LIVE']) }} live and {{ number_format($totals['PENDING']) }} pending.
