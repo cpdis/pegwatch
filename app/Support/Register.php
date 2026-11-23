@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -66,7 +67,7 @@ class Register
     {
         $t = DB::selectOne(
             'select tenid, fmt_tenid, type, type_code, status, survstatus, holders, holder_is_company,
-                    legal_area, area_unit, extract_at, applied_at, granted_at, ends_at, area_ha,
+                    legal_area, area_unit, special_ind, extract_at, applied_at, granted_at, ends_at, area_ha, geom,
                     ST_AsGeoJSON(geom, 6) as geojson, ST_AsGeoJSON(ST_Envelope(geom)) as bbox
              from tenements where pw_slug(fmt_tenid) = ? limit 1',
             [$slug]
@@ -75,8 +76,8 @@ class Register
         if (! $t) {
             $dead = DB::selectOne(
                 'select tenid, fmt_tenid, type, death_reason, holders, holders_are_company, started_at,
-                        granted_at, ended_at, extract_at, ST_AsGeoJSON(geom, 6) as geojson,
-                        ST_AsGeoJSON(ST_Envelope(geom)) as bbox
+                        granted_at, ended_at, extract_at, geom, ST_Area(geom::geography) / 10000 as area_ha,
+                        ST_AsGeoJSON(geom, 6) as geojson, ST_AsGeoJSON(ST_Envelope(geom)) as bbox
                  from dead_tenements where pw_slug(fmt_tenid) = ? order by ended_at desc limit 1',
                 [$slug]
             );
@@ -84,70 +85,107 @@ class Register
                 return null;
             }
         }
-        $tenid = $t->tenid ?? $dead->tenid;
+        $row = $t ?? $dead;
+        $tenid = $row->tenid;
+        $fmt = trim($row->fmt_tenid);
+        $holders = $t
+            ? Holders::present(PgArray::parse($t->holders), PgArray::parse($t->holder_is_company))
+            : Holders::present(PgArray::parse($dead->holders), PgArray::parse($dead->holders_are_company));
+
+        $tenement = [
+            'tenid' => $tenid,
+            'fmt_tenid' => $fmt,
+            'slug' => Slug::make($fmt),
+            'type' => $row->type,
+            'holders' => $holders,
+            'special' => self::isSpecial($t?->special_ind, $fmt),
+            'area_ha' => $row->area_ha !== null ? round((float) $row->area_ha, 1) : null,
+            'extract_at' => $row->extract_at,
+            'granted_at' => $row->granted_at,
+        ] + ($t ? [
+            'type_code' => $t->type_code,
+            'status' => $t->status,
+            'survey_status' => $t->survstatus,
+            'legal_area' => $t->legal_area !== null ? (float) $t->legal_area : null,
+            'area_unit' => $t->area_unit,
+            'applied_at' => $t->applied_at,
+            'ends_at' => $t->ends_at,
+            'dead' => null,
+        ] : [
+            // The dead layer carries no type code; the ID's letters are the same thing.
+            'type_code' => preg_match('/^\s*([A-Z]+)/i', $fmt, $m) ? strtoupper($m[1]) : null,
+            'status' => 'DEAD',
+            'survey_status' => null,
+            'legal_area' => null,
+            'area_unit' => null,
+            'applied_at' => $dead->started_at,
+            'ends_at' => $dead->ended_at,
+            'dead' => ['reason' => $dead->death_reason, 'ended_at' => $dead->ended_at],
+        ]);
+
+        // The outline as hex EWKB, handed back to the spatial queries below. A row with
+        // no outline gets an empty one, so those queries find nothing instead of failing.
+        $geom = $row->geom ?? 'SRID=4326;MULTIPOLYGON EMPTY';
+        $releases = self::tenementReleases($tenid);
+        $overlaps = self::overlaps($geom, $tenid, $holders);
 
         return [
-            'tenement' => $t ? [
-                'fmt_tenid' => trim($t->fmt_tenid),
-                'slug' => Slug::make($t->fmt_tenid),
-                'type' => $t->type,
-                'type_code' => $t->type_code,
-                'status' => $t->status,
-                'survey_status' => $t->survstatus,
-                'holders' => Holders::present(PgArray::parse($t->holders), PgArray::parse($t->holder_is_company)),
-                'legal_area' => $t->legal_area !== null ? (float) $t->legal_area : null,
-                'area_unit' => $t->area_unit,
-                'area_ha' => $t->area_ha !== null ? round((float) $t->area_ha, 1) : null,
-                'applied_at' => $t->applied_at,
-                'granted_at' => $t->granted_at,
-                'ends_at' => $t->ends_at,
-                'extract_at' => $t->extract_at,
-                'dead' => null,
-            ] : [
-                'fmt_tenid' => trim($dead->fmt_tenid),
-                'slug' => Slug::make($dead->fmt_tenid),
-                'type' => $dead->type,
-                'type_code' => null,
-                'status' => 'DEAD',
-                'survey_status' => null,
-                'holders' => Holders::present(PgArray::parse($dead->holders), PgArray::parse($dead->holders_are_company)),
-                'legal_area' => null,
-                'area_unit' => null,
-                'area_ha' => null,
-                'applied_at' => $dead->started_at,
-                'granted_at' => $dead->granted_at,
-                'ends_at' => $dead->ended_at,
-                'extract_at' => $dead->extract_at,
-                'dead' => ['reason' => $dead->death_reason, 'ended_at' => $dead->ended_at],
-            ],
-            'geometry' => json_decode(($t ?? $dead)->geojson ?? 'null'),
-            'bbox' => self::bbox(($t ?? $dead)->bbox),
+            'tenement' => $tenement,
+            'geometry' => json_decode($row->geojson ?? 'null'),
+            'bbox' => self::bboxUnion([self::bbox($row->bbox), ...array_column($releases, 'bbox')]),
             'events' => self::events(['tenid' => $tenid], 50),
-            'overlaps' => $t ? self::overlaps($tenid) : [],
-            'releases' => array_map(fn ($r) => (array) $r, DB::select(
-                'select rlesid, release_at from release_pending where tenid = ? order by release_at', [$tenid]
-            )),
+            'overlaps' => $overlaps,
+            'releases' => $releases,
+            'restrictions' => self::restrictions($geom),
+            'actions' => self::pendingActions($tenid),
+            'uncovered' => $dead ? self::uncoveredShare($geom) : null,
+            'held_before' => self::heldBefore($geom, $tenid),
+            'neighbours' => self::neighbours($geom, $tenid, $holders, array_column($overlaps, 'fmt_tenid')),
+            'holder_context' => self::holderContext($row->holders, $geom, $tenid),
+            'location' => self::nearestPlace($geom),
+            'wait' => $t?->status === 'PENDING' ? self::waitToGrant($t->type_code, $fmt, $t->applied_at) : null,
         ];
     }
 
-    /** Other live or pending tenements sharing ground with this one. */
-    public static function overlaps(string $tenid): array
+    /**
+     * Live and pending tenements over at least 0.5% of the given ground, oldest
+     * application first (lodgement order). "Can overlap" marks the kinds that may sit
+     * over other tenements: L and G licences and special prospecting licences.
+     *
+     * @param  string  $geom  the subject's outline as hex EWKB
+     * @param  array  $holders  the subject's holders, from Holders::present()
+     */
+    public static function overlaps(string $geom, string $tenid, array $holders = []): array
     {
-        return array_map(fn ($r) => [
-            'fmt_tenid' => trim($r->fmt_tenid),
-            'slug' => Slug::make($r->fmt_tenid),
-            'type' => $r->type,
-            'status' => $r->status,
-            'share' => round((float) $r->share, 3),
-        ], DB::select(
-            'select o.fmt_tenid, o.type, o.status,
-                    ST_Area(ST_Intersection(o.geom, t.geom)) / nullif(ST_Area(t.geom), 0) as share
-             from tenements t join tenements o on o.geom && t.geom and o.tenid <> t.tenid
-               and ST_Intersects(o.geom, t.geom)
-             where t.tenid = ?
-               and ST_Area(ST_Intersection(o.geom, t.geom)) >= 0.005 * nullif(ST_Area(t.geom), 0)
-             order by share desc limit 25',
-            [$tenid]
+        $mine = array_column($holders, 'slug');
+
+        return array_map(function ($r) use ($mine) {
+            $holders = Holders::present(PgArray::parse($r->holders), PgArray::parse($r->holder_is_company));
+            $special = self::isSpecial($r->special_ind, $r->fmt_tenid);
+
+            return [
+                'fmt_tenid' => trim($r->fmt_tenid),
+                'slug' => Slug::make($r->fmt_tenid),
+                'type' => $r->type,
+                'type_code' => $r->type_code,
+                'status' => $r->status,
+                'holders' => $holders,
+                'same_holder' => (bool) array_intersect($mine, array_column($holders, 'slug')),
+                'special' => $special,
+                'can_overlap' => $special || in_array($r->type_code, ['L', 'G'], true),
+                'applied_at' => $r->applied_at,
+                'share' => round((float) $r->share, 3),
+            ];
+        }, DB::select(
+            'select * from (
+               select o.fmt_tenid, o.type, o.type_code, o.status, o.holders, o.holder_is_company,
+                      o.special_ind, o.applied_at,
+                      ST_Area(ST_Intersection(o.geom, s.geom)) / nullif(ST_Area(s.geom), 0) as share
+               from (select ?::geometry as geom offset 0) s
+               join tenements o on o.geom && s.geom and o.tenid <> ? and ST_Intersects(o.geom, s.geom)
+             ) x where share >= 0.005
+             order by applied_at nulls last, fmt_tenid limit 50',
+            [$geom, $tenid]
         ));
     }
 
@@ -547,5 +585,293 @@ class Register
             'events' => (int) $r->events,
             'layers' => $layers->get($r->id, collect())->all(),
         ], $runs);
+    }
+
+    // c-tenement: tenement page queries. The spatial ones take the subject's outline as
+    // hex EWKB (from tenement()), so live and dead tenements share them. They read it
+    // through `(select ?::geometry as geom offset 0) s`: the offset stops Postgres
+    // inlining the parameter into every row, so PostGIS can cache the outline across
+    // rows (without it, neighbours of TR 70/5461 took 7.8 s instead of 80 ms).
+
+    /** A special prospecting licence: flagged in the register, or an ID ending in S ("P 27/2688S", "P 09/508-S"). */
+    private static function isSpecial(?string $indicator, string $fmtTenid): bool
+    {
+        return trim((string) $indicator) === 'S' || (bool) preg_match('~/\d+-?S\s*$~i', $fmtTenid);
+    }
+
+    /** The smallest box around every given box ([w, s, e, n]); nulls are skipped. */
+    private static function bboxUnion(array $boxes): ?array
+    {
+        $boxes = array_values(array_filter($boxes));
+
+        return $boxes ? [
+            min(array_column($boxes, 0)), min(array_column($boxes, 1)),
+            max(array_column($boxes, 2)), max(array_column($boxes, 3)),
+        ] : null;
+    }
+
+    /** Scheduled compulsory releases of part of a tenement, soonest first, with the released hectares and parcel. */
+    public static function tenementReleases(string $tenid): array
+    {
+        return array_map(fn ($r) => [
+            'rlesid' => $r->rlesid,
+            'release_at' => $r->release_at,
+            'release_local' => $r->release_local,
+            'ha' => $r->ha !== null ? round((float) $r->ha, 1) : null,
+            'geometry' => json_decode($r->geojson ?? 'null'),
+            'bbox' => self::bbox($r->bbox),
+        ], DB::select(
+            "select rlesid, release_at,
+                    to_char(release_at at time zone 'Australia/Perth', 'YYYY-MM-DD HH24:MI:SS') as release_local,
+                    ST_Area(geom::geography) / 10000 as ha,
+                    ST_AsGeoJSON(geom, 6) as geojson, ST_AsGeoJSON(ST_Envelope(geom)) as bbox
+             from release_pending where tenid = ? order by release_at, rlesid",
+            [$tenid]
+        ));
+    }
+
+    /** The next scheduled release of a tenement, by its page slug, with the AWST wall-clock time (for the .ics route). */
+    public static function nextRelease(string $slug): ?object
+    {
+        return DB::selectOne(
+            "select trim(t.fmt_tenid) as fmt_tenid, t.slug, r.rlesid,
+                    to_char(r.release_at at time zone 'Australia/Perth', 'YYYY-MM-DD HH24:MI:SS') as release_local
+             from (select tenid, fmt_tenid, pw_slug(fmt_tenid) as slug from tenements where pw_slug(fmt_tenid) = ?) t
+             join release_pending r on r.tenid = t.tenid
+             order by r.release_at, r.rlesid limit 1",
+            [$slug]
+        );
+    }
+
+    /** Land restrictions over at least 0.5% of the ground, largest share first. */
+    public static function restrictions(string $geom): array
+    {
+        return array_map(fn ($r) => [
+            'kind' => $r->kind,
+            'land_id' => $r->land_id,
+            'name' => $r->name,
+            'purpose' => $r->purpose,
+            'share' => round((float) $r->share, 3),
+        ], DB::select(
+            'select * from (
+               select r.kind, r.land_id, r.name, r.purpose,
+                      ST_Area(ST_Intersection(r.geom, s.geom)) / nullif(ST_Area(s.geom), 0) as share
+               from (select ?::geometry as geom offset 0) s
+               join land_restrictions r on r.geom && s.geom and ST_Intersects(r.geom, s.geom)
+             ) x where share >= 0.005 order by share desc, kind, land_id',
+            [$geom]
+        ));
+    }
+
+    /** Amalgamation and restoration applications pending on a tenement, oldest first. */
+    public static function pendingActions(string $tenid): array
+    {
+        return array_map(fn ($r) => (array) $r, DB::select(
+            "select 'amalgamation' as kind, amalgid as id, starts_at as lodged_at from amalgamation_pending where tenid = ?
+             union all
+             select 'restoration', restnid, starts_at from restoration_pending where tenid = ?
+             order by lodged_at, id",
+            [$tenid, $tenid]
+        ));
+    }
+
+    /**
+     * The share of the ground with no blocking tenement over it today: live or pending,
+     * and not an L or G licence or a special prospecting licence. Null without an outline.
+     */
+    public static function uncoveredShare(string $geom): ?float
+    {
+        $share = DB::scalar(
+            "select case when ST_Area(s.geom) = 0 then null else greatest(0, least(1,
+                      1 - coalesce(ST_Area(ST_Union(ST_Intersection(o.geom, s.geom))), 0) / ST_Area(s.geom))) end
+             from (select ?::geometry as geom offset 0) s
+             left join tenements o on o.geom && s.geom and ST_Intersects(o.geom, s.geom)
+               and coalesce(o.type_code, '') not in ('L', 'G')
+               and coalesce(trim(o.special_ind), '') <> 'S' and o.fmt_tenid !~* '/[0-9]+-?S\s*$'
+             group by s.geom",
+            [$geom]
+        );
+
+        return $share === null ? null : round((float) $share, 3);
+    }
+
+    /** Dead tenements that covered at least 10% of the ground, the most recent end first. */
+    public static function heldBefore(string $geom, string $tenid): array
+    {
+        return array_map(fn ($r) => [
+            'fmt_tenid' => trim($r->fmt_tenid),
+            'slug' => Slug::make($r->fmt_tenid),
+            'type' => $r->type,
+            'holders' => Holders::present(PgArray::parse($r->holders), PgArray::parse($r->holders_are_company)),
+            'started_at' => $r->started_at,
+            'ended_at' => $r->ended_at,
+            'reason' => $r->death_reason,
+            'share' => round((float) $r->share, 3),
+        ], DB::select(
+            'select * from (
+               select distinct on (d.tenid) d.fmt_tenid, d.type, d.holders, d.holders_are_company,
+                      d.started_at, d.ended_at, d.death_reason,
+                      ST_Area(ST_Intersection(d.geom, s.geom)) / nullif(ST_Area(s.geom), 0) as share
+               from (select ?::geometry as geom offset 0) s
+               join dead_tenements d on d.geom && s.geom and d.tenid <> ? and ST_Intersects(d.geom, s.geom)
+               order by d.tenid, d.ended_at desc
+             ) x where share >= 0.1 order by ended_at desc, fmt_tenid limit 20',
+            [$geom, $tenid]
+        ));
+    }
+
+    /**
+     * Live and pending tenements within 100 m, except those in $exclude (the overlaps,
+     * which have their own block), grouped by holder, the group with the newest
+     * application first.
+     */
+    public static function neighbours(string $geom, string $tenid, array $holders = [], array $exclude = []): array
+    {
+        $mine = array_column($holders, 'slug');
+        $groups = [];
+        $rows = DB::select(
+            'select o.fmt_tenid, o.type, o.type_code, o.status, o.holders, o.holder_is_company, o.applied_at
+             from (select ?::geometry as geom offset 0) s
+             join tenements o on o.geom && ST_Expand(s.geom, 0.002) and o.tenid <> ?
+               and ST_DWithin(o.geom::geography, s.geom::geography, 100)
+             order by o.applied_at desc nulls last, o.fmt_tenid limit 60',
+            [$geom, $tenid]
+        );
+        foreach ($rows as $r) {
+            $fmt = trim($r->fmt_tenid);
+            if (in_array($fmt, $exclude, true)) {
+                continue;
+            }
+            $h = Holders::present(PgArray::parse($r->holders), PgArray::parse($r->holder_is_company));
+            $slugs = array_column($h, 'slug');
+            $groups[implode('|', $slugs)] ??= [
+                'holders' => $h,
+                'same_holder' => (bool) array_intersect($mine, $slugs),
+                'tenements' => [],
+            ];
+            $groups[implode('|', $slugs)]['tenements'][] = [
+                'fmt_tenid' => $fmt,
+                'slug' => Slug::make($fmt),
+                'type' => $r->type,
+                'type_code' => $r->type_code,
+                'status' => $r->status,
+                'applied_at' => $r->applied_at,
+            ];
+        }
+
+        return array_values($groups);
+    }
+
+    /**
+     * Each holder's live and pending count ("105 tenements · 37 pending") and the
+     * holders' other live or pending tenements within 20 km, nearest first.
+     *
+     * @param  string  $holders  the subject's holders as a Postgres text[] literal
+     */
+    public static function holderContext(string $holders, string $geom, string $tenid): array
+    {
+        $counts = DB::select(
+            "select h.name, count(*) as total, count(*) filter (where t.status = 'PENDING') as pending
+             from tenements t cross join lateral unnest(t.holders) as h(name)
+             where t.holders && ?::text[] and h.name = any(?::text[])
+             group by h.name",
+            [$holders, $holders]
+        );
+        $nearby = DB::select(
+            'select o.fmt_tenid, o.type, o.type_code, o.status,
+                    ST_Distance(o.geom::geography, s.geom::geography) as m, count(*) over () as n
+             from (select ?::geometry as geom offset 0) s
+             join tenements o on o.holders && ?::text[] and o.tenid <> ?
+               and o.geom && ST_Expand(s.geom, 0.25) and ST_DWithin(o.geom::geography, s.geom::geography, 20000)
+             order by m, o.fmt_tenid limit 8',
+            [$geom, $holders, $tenid]
+        );
+
+        return [
+            'counts' => array_column(array_map(fn ($r) => [
+                'name' => $r->name, 'total' => (int) $r->total, 'pending' => (int) $r->pending,
+            ], $counts), null, 'name'),
+            'nearby' => array_map(fn ($r) => [
+                'fmt_tenid' => trim($r->fmt_tenid),
+                'slug' => Slug::make($r->fmt_tenid),
+                'type' => $r->type,
+                'type_code' => $r->type_code,
+                'status' => $r->status,
+                'km' => round((float) $r->m / 1000, 1),
+            ], $nearby),
+            'nearby_total' => (int) ($nearby[0]->n ?? 0),
+        ];
+    }
+
+    /** The nearest place in `places` (h-data) with distance and bearing from it, or null until that table exists. */
+    public static function nearestPlace(string $geom): ?array
+    {
+        if (! DB::scalar("select to_regclass('places') is not null")) {
+            return null;
+        }
+        $r = DB::selectOne(
+            'select p.name, ST_Distance(p.geom::geography, s.c::geography) as m,
+                    degrees(ST_Azimuth(p.geom::geography, s.c::geography)) as bearing
+             from (select ST_PointOnSurface(?::geometry) as c) s cross join places p
+             where not ST_IsEmpty(s.c)
+             order by p.geom <-> s.c limit 1',
+            [$geom]
+        );
+
+        return $r ? [
+            'place' => $r->name,
+            'km' => round((float) $r->m / 1000, 1),
+            'bearing' => $r->bearing !== null ? (float) $r->bearing : null,
+        ] : null;
+    }
+
+    /**
+     * How long applications of this type took to be granted, from grants since 2020
+     * (live tenements, and dead ones that had been granted), by mineral field. A field
+     * needs 10 grants; with fewer, the WA-wide figure for the type stands in. The
+     * medians are cached per ingest run.
+     */
+    public static function waitToGrant(?string $typeCode, string $fmtTenid, ?string $appliedAt): ?array
+    {
+        if ($typeCode === null || $appliedAt === null) {
+            return null;
+        }
+        $key = 'wait-to-grant:'.(self::latestRun()?->id ?? 0).':'.$typeCode;
+        $byField = Cache::remember($key, now()->addDay(), fn () => array_column(array_map(fn ($r) => (array) $r, DB::select(
+            <<<'SQL'
+            with g as (
+              select fmt_tenid, applied_at as applied, granted_at as granted from tenements
+               where type_code = ? and granted_at >= '2020-01-01' and granted_at > applied_at
+              union all
+              select d.fmt_tenid, d.started_at, d.granted_at from (
+                select distinct on (tenid) tenid, fmt_tenid, started_at, granted_at from dead_tenements
+                 where granted_at >= '2020-01-01' and granted_at > started_at
+                 order by tenid, ended_at desc
+              ) d
+              where upper(substring(d.fmt_tenid from '^\s*([A-Za-z]+)')) = ?
+                and not exists (select 1 from tenements t where t.tenid = d.tenid)
+            )
+            select case when grouping(field) = 1 then 'WA' else coalesce(field, '') end as field, count(*) as n,
+                   percentile_cont(0.5) within group (order by extract(epoch from granted - applied) / 86400 / 30.4375) as months
+            from (select substring(fmt_tenid from '^\s*[A-Za-z]{1,2}\s*(\d{2})\s*/') as field, applied, granted from g) x
+            group by rollup (field)
+            SQL,
+            [$typeCode, $typeCode]
+        )), null, 'field'));
+
+        $field = Format::fieldNumber($fmtTenid);
+        $scope = $field !== null && ($byField[$field]['n'] ?? 0) >= 10 ? 'field' : 'wa';
+        $stats = $scope === 'field' ? $byField[$field] : ($byField['WA'] ?? null);
+        if (! $stats || $stats['n'] < 10) {
+            return null;
+        }
+        $applied = CarbonImmutable::parse($appliedAt, 'Australia/Perth');
+
+        return [
+            'scope' => $scope,
+            'grants' => (int) $stats['n'],
+            'median_months' => (int) round((float) $stats['months']),
+            'waited_months' => (int) floor($applied->diffInMonths(CarbonImmutable::now('Australia/Perth'))),
+        ];
     }
 }
