@@ -51,7 +51,8 @@ class PegwatchTest extends TestCase
         self::seedRegister();
 
         $this->get('/')->assertOk()
-            ->assertSee('1 live and 1 pending')
+            ->assertSeeText('2 tenements in view')
+            ->assertSeeInOrder(['Live', '1', 'Pending', '1'])
             ->assertSee('P 15/9')
             ->assertSee('Surrendered. 97% of its area has no other tenement over it.');
     }
