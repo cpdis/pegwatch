@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
+use App\Models\WatchArea;
 use App\Support\Format;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 /** The frame (brand, freshness chip, footer), /data, share tags and images, and the 404. */
@@ -128,6 +131,21 @@ class GlobalPagesTest extends TestCase
         $this->assertSame(30, substr_count($html, 'data-test="run-row"'));
     }
 
+    public function test_a_tenement_page_carries_its_headline_and_image_as_share_tags(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-23 06:00:00', 'UTC'));
+        $run = self::seedRegister();
+        $headline = 'Pending mining lease application by YANDAL RESOURCES LIMITED, lodged 21 Apr 2023 (3 years 7 months ago). 198 ha in the Kanowna district, unsurveyed.';
+
+        $this->get('/tenements/m-27-518')->assertOk()
+            ->assertSee('<meta name="description" content="'.$headline.'" />', false)
+            ->assertSee('<meta property="og:description" content="'.$headline.'" />', false)
+            ->assertSee('<meta property="og:title" content="M 27/518 · Mining lease · Pending" />', false)
+            ->assertSee('<link rel="canonical" href="'.route('tenements.show', 'm-27-518').'" />', false)
+            ->assertSee('<meta property="og:image" content="'.route('og.tenement', ['slug' => 'm-27-518', 'v' => $run]).'" />', false)
+            ->assertSee('<meta name="twitter:card" content="summary_large_image" />', false);
+    }
+
     public function test_a_natural_person_holder_page_has_no_share_image_and_a_company_page_does(): void
     {
         self::seedRegister();
@@ -157,6 +175,37 @@ class GlobalPagesTest extends TestCase
             '<meta name="description" content="The WA mining register, 16 Nov 2026 to 23 Nov 2026: 12 new applications, 1 tenement dead, no releases scheduled." />',
             false
         );
+    }
+
+    public function test_the_tenement_share_image_is_a_1200_by_630_png(): void
+    {
+        self::seedRegister();
+
+        $res = $this->get('/og/tenements/m-27-518.png')->assertOk()
+            ->assertHeader('Content-Type', 'image/png')
+            ->assertHeaderMissing('Set-Cookie');
+        [$w, $h] = getimagesizefromstring($res->getContent());
+        $this->assertSame([1200, 630], [$w, $h]);
+
+        $this->get('/og/tenements/e-99-999.png')->assertNotFound();
+    }
+
+    public function test_the_watch_area_image_needs_a_signed_url(): void
+    {
+        $run = self::seedRegister();
+        DB::insert(
+            "insert into tenement_events (run_id, event_type, tenid, fmt_tenid, geom) values (?, 'death', 'P  1500009', 'P 15/9', ?::geometry)",
+            [$run, self::square(121.51, -30.79)]
+        );
+        $area = User::factory()->create()->watchAreas()->create([
+            'name' => 'Kalgoorlie east', 'latitude' => -30.79, 'longitude' => 121.51, 'radius_km' => 5, 'event_types' => WatchArea::FREE_EVENT_TYPES,
+        ]);
+
+        $this->get("/og/areas/{$area->id}.png")->assertForbidden();
+
+        $res = $this->get(URL::signedRoute('og.area', ['watchArea' => $area->id, 'run' => $run]))->assertOk()
+            ->assertHeader('Content-Type', 'image/png');
+        $this->assertSame([1200, 630], array_slice(getimagesizefromstring($res->getContent()), 0, 2));
     }
 
     private function between(string $html, string $from, string $to): string

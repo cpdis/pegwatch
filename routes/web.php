@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DigestUnsubscribeController;
 use App\Http\Controllers\IngestHookController;
+use App\Http\Controllers\OgImageController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\TileController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -31,8 +32,14 @@ Route::get('tiles/{layer}/{z}/{x}/{y}.mvt', [TileController::class, 'show'])
 Route::post('hooks/ingest-complete', IngestHookController::class)
     ->withoutMiddleware([PreventRequestForgery::class])->name('hooks.ingest');
 
-// g-visual: the data status page.
+// g-visual: the data status page and share images. The images carry no
+// session or cookies (so a CDN can cache them); the area image needs a
+// signed URL.
 Route::livewire('data', 'pages::data')->name('data');
+Route::get('og/tenements/{slug}.png', [OgImageController::class, 'tenement'])
+    ->where('slug', '[a-z0-9-]+')->withoutMiddleware('web')->name('og.tenement');
+Route::get('og/areas/{watchArea}.png', [OgImageController::class, 'area'])
+    ->whereNumber('watchArea')->withoutMiddleware('web')->middleware('signed')->name('og.area');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::redirect('dashboard', '/watch-areas')->name('dashboard');
