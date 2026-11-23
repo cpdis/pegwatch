@@ -129,7 +129,7 @@ new #[Title('Data and disclaimer')] class extends Component {
     <flux:heading size="lg" level="2" class="mt-10">{{ __('Disclaimer') }}</flux:heading>
     <div class="mt-3 space-y-3 text-sm text-zinc-600 dark:text-zinc-300" data-test="disclaimer">
         <p>{{ __('Pegwatch is a screening aid, not advice. It shows what the department\'s open data said at its latest extract. That data can be out of date or wrong, and it leaves things out (above).') }}</p>
-        <p>{{ __('Pegwatch never says ground is open or can be applied for. Where it shows ground with no live or pending tenement over it, that is what the register shows and nothing more.') }}</p>
+        <p>{{ __('Where Pegwatch shows ground with no live or pending tenement over it on the register, that is all it shows. It is not a finding that anyone may peg that ground or apply for it.') }}</p>
         <p>
             {{ __('Before you peg, apply, buy or sell, confirm in') }}
             <flux:link href="{{ Format::TENGRAPH_URL }}" target="_blank" rel="noreferrer">TENGRAPH</flux:link>
