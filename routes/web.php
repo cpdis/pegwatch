@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ActivityRssController;
 use App\Http\Controllers\DigestUnsubscribeController;
 use App\Http\Controllers\IngestHookController;
 use App\Http\Controllers\OgImageController;
@@ -47,6 +48,10 @@ Route::get('og/tenements/{slug}.png', [OgImageController::class, 'tenement'])
     ->where('slug', '[a-z0-9-]+')->withoutMiddleware('web')->name('og.tenement');
 Route::get('og/areas/{watchArea}.png', [OgImageController::class, 'area'])
     ->whereNumber('watchArea')->withoutMiddleware('web')->middleware('signed')->name('og.area');
+
+// e-activity
+// Public and cookie-free, like the tiles, so a CDN can cache it.
+Route::get('activity.rss', ActivityRssController::class)->withoutMiddleware('web')->name('activity.rss');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::redirect('dashboard', '/watch-areas')->name('dashboard');

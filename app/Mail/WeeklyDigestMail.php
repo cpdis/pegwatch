@@ -18,9 +18,11 @@ class WeeklyDigestMail extends Mailable
         $end = CarbonImmutable::parse($this->content['period_end'])->setTimezone('Australia/Perth');
         $freed = count($this->content['freed']);
 
-        return new Envelope(subject: 'Pegwatch weekly: '.($freed > 0
-            ? $freed.' '.($freed === 1 ? 'tenement' : 'tenements').' left open ground'
-            : 'the WA register').', week to '.$end->format('j M'));
+        return new Envelope(subject: 'Pegwatch weekly: '.match (true) {
+            $this->content['stale'] ?? false => 'no new register extract',
+            $freed > 0 => $freed.' '.($freed === 1 ? 'tenement' : 'tenements').' freed ground',
+            default => 'the WA register',
+        }.', week to '.$end->format('j M'));
     }
 
     /** RFC 8058 one-click unsubscribe, which Gmail and Yahoo require of bulk senders. */
