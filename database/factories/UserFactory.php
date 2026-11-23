@@ -46,6 +46,12 @@ class UserFactory extends Factory
         ]);
     }
 
+    /** An account that signs in by emailed link only. */
+    public function withoutPassword(): static
+    {
+        return $this->state(fn (array $attributes) => ['password' => null]);
+    }
+
     /**
      * Indicate that the model has two-factor authentication configured.
      */

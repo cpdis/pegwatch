@@ -1,8 +1,8 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+// Needs the scheduler running (on Laravel Cloud: enable it for the app).
+Schedule::command('pegwatch:release-reminders')->everyFifteenMinutes()->withoutOverlapping();
+// Unconfirmed watches a day after their link expired, and accounts nobody confirmed.
+Schedule::command('model:prune')->daily();
