@@ -339,12 +339,13 @@ class Register
     }
 
     /**
-     * Cmd+K search: tenements by ID prefix (live first, then dead ones that
-     * have a page) and holders by name. Returns one ranked list, so Enter
-     * and the first row always agree: a query shaped like a tenement ID
-     * ("E45", "m 70/1") lists tenements first, anything else lists holders
-     * first. Holder names that differ only in punctuation share a page
-     * (pw_slug), so they are one result.
+     * Cmd+K search over tenements, holders and places. Returns one ranked
+     * list, so Enter and the first row always agree. A query shaped like a
+     * tenement ID ("E45", "m 70/1") lists tenements, then holders. Any other
+     * lists matching places, the holder of exactly that name,
+     * the name-match group ("Entities matching NORTHERN STAR"), the other
+     * holders, other places, then tenements. Holder names that differ only
+     * in punctuation share a page (pw_slug), so they are one result.
      */
     public static function search(string $q, int $limit = 8): array
     {
@@ -354,51 +355,37 @@ class Register
         }
 
         $compact = preg_replace('/[^a-z0-9]/', '', strtolower($q));
-        $tenements = [];
-        if ($compact !== '') {
-            $tenements = DB::select(
-                'select fmt_tenid, type, status, null as death_reason from tenements
-                 where pw_compact(fmt_tenid) like ? order by pw_compact(fmt_tenid), fmt_tenid limit ?',
-                [$compact.'%', $limit]
-            );
-            // Dead tenements have pages too. Skip any ID that is live again.
-            if (count($tenements) < $limit) {
-                $tenements = [...$tenements, ...DB::select(
-                    "select fmt_tenid, type, 'DEAD' as status, death_reason from (
-                       select fmt_tenid, type, death_reason, ended_at from dead_tenements
-                       where pw_compact(fmt_tenid) like ? order by pw_compact(fmt_tenid), ended_at desc limit ?
-                     ) d where not exists (select 1 from tenements t where pw_slug(t.fmt_tenid) = pw_slug(d.fmt_tenid))",
-                    [$compact.'%', $limit * 4]
-                )];
-            }
-        }
+        $t = $compact === '' ? [] : self::searchTenements($q, $compact, $limit);
 
         // Holders are matched on their slugs, so punctuation and spacing
         // don't matter ("smith john" finds "SMITH, JOHN"), and names that
-        // share a page are one result. Live holders rank by live tenement
-        // count; holders found only on dead tenements fill any space left.
+        // share a page are one result. Holders with live or pending ground
+        // rank by how much; holders found only on dead tenements fill any
+        // space left.
         $slug = Slug::make($q);
-        $holders = $slug === '' ? [] : self::searchHolders($slug, $limit);
-
-        $seen = [];
-        $t = [];
-        foreach ($tenements as $row) {
-            $key = Slug::make($row->fmt_tenid);
-            if (isset($seen[$key]) || count($t) >= $limit) {
-                continue;
-            }
-            $seen[$key] = true;
-            $t[] = [
-                'kind' => 'tenement', 'slug' => $key, 'fmt_tenid' => trim($row->fmt_tenid),
-                'type' => $row->type, 'status' => $row->status, 'death_reason' => $row->death_reason,
-            ];
-        }
         $h = array_map(fn ($row) => [
             'kind' => 'holder', 'slug' => $row->slug, 'name' => $row->name,
-            'live' => (int) $row->live,
-        ], $holders);
+            'live' => (int) $row->live, 'pending' => (int) $row->pending, 'is_company' => (bool) $row->is_company,
+        ], $slug === '' ? [] : self::searchHolders($slug, $limit));
 
-        return preg_match('/^[a-z]{1,3}\s*\d/i', $q) ? [...$t, ...$h] : [...$h, ...$t];
+        if (preg_match('/^[a-z]{1,3}\s*\d/i', $q)) {
+            return [...$t, ...$h];
+        }
+
+        // A town's name, or four or more letters of one, leads; a shorter
+        // prefix ("kal") is as likely a company, so its places go last.
+        $places = self::searchPlaces($slug);
+        $leads = fn ($p) => $p['exact'] || strlen($slug) >= 4;
+        $leadPlaces = array_values(array_filter($places, $leads));
+        $otherPlaces = array_values(array_filter($places, fn ($p) => ! $leads($p)));
+        $exactHolder = array_splice($h, 0, ($h[0]['slug'] ?? null) === $slug ? 1 : 0);
+        $match = self::nameMatches(self::nameStem($q));
+        $group = $match ? [[
+            'kind' => 'group', 'slug' => $match['stem'], 'label' => $match['label'],
+            'entities' => count($match['entities']), 'tenements' => $match['tenements'],
+        ]] : [];
+
+        return [...$leadPlaces, ...$exactHolder, ...$group, ...$h, ...$otherPlaces, ...$t];
     }
 
     /**
@@ -409,28 +396,27 @@ class Register
      */
     private static function searchHolders(string $slug, int $limit): array
     {
-        $order = 'order by slug = ? desc, live desc, slug limit ?';
+        // Per holder name: live and pending counts and whether the register
+        // marks it a company; then per slug, the commonest spelling.
+        $names = "select h.name, h.is_company, count(*) as n,
+                         count(*) filter (where t.status = 'LIVE') as live,
+                         count(*) filter (where t.status = 'PENDING') as pending
+                  from tenements t cross join lateral unnest(t.holders, t.holder_is_company) as h(name, is_company)";
+        $bySlug = 'select slug, (array_agg(name order by n desc, name))[1] as name, sum(live) as live,
+                          sum(pending) as pending, bool_or(is_company) as is_company, sum(n) as n';
         if (strlen($slug) < 3) {
             return DB::select(
-                "select slug, (array_agg(name order by n desc, name))[1] as name, sum(n) as live
-                 from (select name, pw_slug(name) as slug, n from (
-                         select h.name, count(*) as n from tenements t
-                         cross join lateral unnest(t.holders) as h(name)
-                         where array_to_string(t.holders, ' ') ilike ? group by h.name) names
-                       ) m
-                 where slug like ? group by slug $order",
+                "$bySlug from (select *, pw_slug(name) as slug from ($names
+                   where array_to_string(t.holders, ' ') ilike ? group by h.name, h.is_company) names) m
+                 where slug like ? group by slug order by slug = ? desc, sum(n) desc, slug limit ?",
                 ['%'.$slug[0].'%'.substr($slug, 1).'%', "$slug%", $slug, $limit]
             );
         }
 
-        $prefixFirst = 'order by slug = ? desc, slug like ? desc, live desc, slug limit ?';
+        $prefixFirst = 'order by slug = ? desc, slug like ? desc, sum(n) desc, slug limit ?';
         $live = DB::select(
-            "select slug, (array_agg(name order by n desc, name))[1] as name, sum(n) as live
-             from (select name, pw_slug(name) as slug, n from (
-                     select h.name, count(*) as n from tenements t
-                     cross join lateral unnest(t.holders) as h(name)
-                     where pw_holder_text(t.holders) like ? group by h.name) names
-                   ) m
+            "$bySlug from (select *, pw_slug(name) as slug from ($names
+               where pw_holder_text(t.holders) like ? group by h.name, h.is_company) names) m
              where slug like ? group by slug $prefixFirst",
             ["%$slug%", "%$slug%", $slug, "$slug%", $limit]
         );
@@ -444,17 +430,17 @@ class Register
         // index first so the cap can't hide it.
         $known = array_map(fn ($r) => $r->slug, $live);
         $dead = DB::select(
-            "select slug, min(name) as name, 0 as live from (
-               (select h.name, pw_slug(h.name) as slug from dead_tenements d
-                cross join lateral unnest(d.holders) as h(name)
-                where public.pw_slugs(d.holders) @> array[?]::text[] and pw_slug(h.name) = ?)
+            'select slug, min(name) as name, 0 as live, 0 as pending, bool_or(is_company) as is_company from (
+               (select h.name, h.is_company, pw_slug(h.name) as slug from dead_tenements d
+                cross join lateral unnest(d.holders, d.holders_are_company) as h(name, is_company)
+                where public.pw_slugs(d.holders) @> array[?]::text[] and pw_slug(h.name) = ? limit 2000)
                union all
-               (select h.name, pw_slug(h.name) from dead_tenements d
-                cross join lateral unnest(d.holders) as h(name)
+               (select h.name, h.is_company, pw_slug(h.name) from dead_tenements d
+                cross join lateral unnest(d.holders, d.holders_are_company) as h(name, is_company)
                 where pw_holder_text(d.holders) like ? and pw_slug(h.name) like ? limit 2000)
              ) m
              where not (slug = any(?::text[]))
-             group by slug $prefixFirst",
+             group by slug order by slug = ? desc, slug like ? desc, slug limit ?',
             [$slug, $slug, "%$slug%", "%$slug%", '{'.implode(',', $known).'}', $slug, "$slug%", $limit - count($live)]
         );
 
@@ -684,5 +670,95 @@ class Register
                 'name' => $r->name, 'slug' => $r->slug, 'live' => (int) $r->live, 'pending' => (int) $r->pending,
             ], $entities),
         ];
+    }
+
+    /**
+     * Tenements whose compact ID starts with the query, live ones first and
+     * then dead ones that have a page. The ID itself ranks first, with any
+     * letter suffix ("p 27/2688" finds P 27/2688-S), then IDs of the shape
+     * the query spells ("m 26/1" is type M, field 26, a number starting 1),
+     * so M 26/1xx, live or dead, lists before M 261SA.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function searchTenements(string $q, string $compact, int $limit): array
+    {
+        $shape = preg_match('~^([a-z]{1,3})\s*(\d{1,2})\s*/\s*(\d*)~i', $q, $m)
+            ? strtoupper($m[1]).' '.$m[2].'/'.$m[3].'%' : '';
+        $shaped = "(? <> '' and fmt_tenid ilike ?)";
+        $rank = "pw_compact(fmt_tenid) ~ ? and (? = '' or fmt_tenid ilike ?) as exact, $shaped as shaped";
+        $bind = ['^'.$compact.'[a-z]*$', $shape, $shape, $shape, $shape];
+        $rows = [
+            ...DB::select(
+                "select fmt_tenid, type, status, null as death_reason, area_ha, 0 as dead, $rank from tenements
+                 where pw_compact(fmt_tenid) like ? order by pw_compact(fmt_tenid), fmt_tenid limit ?",
+                [...$bind, $compact.'%', $limit]
+            ),
+            // Dead tenements have pages too. Skip any ID that is live again.
+            ...DB::select(
+                "select fmt_tenid, type, 'DEAD' as status, death_reason,
+                        ST_Area(geom::geography) / 10000 as area_ha, 1 as dead, $rank from (
+                   select fmt_tenid, type, death_reason, geom, ended_at from dead_tenements
+                   where pw_compact(fmt_tenid) like ? order by pw_compact(fmt_tenid), ended_at desc limit ?
+                 ) d where not exists (select 1 from tenements t where pw_slug(t.fmt_tenid) = pw_slug(d.fmt_tenid))",
+                [...$bind, $compact.'%', $limit * 4]
+            ),
+        ];
+        // A stable sort keeps the ID order within each rank.
+        usort($rows, fn ($a, $b) => [$b->exact, $b->shaped, $a->dead] <=> [$a->exact, $a->shaped, $b->dead]);
+
+        $out = [];
+        foreach ($rows as $row) {
+            $slug = Slug::make($row->fmt_tenid);
+            if (count($out) < $limit && ! isset($out[$slug])) {
+                $out[$slug] = [
+                    'kind' => 'tenement', 'slug' => $slug, 'fmt_tenid' => trim($row->fmt_tenid),
+                    'type' => $row->type, 'status' => $row->status, 'death_reason' => $row->death_reason,
+                    'area_ha' => $row->area_ha !== null ? (float) $row->area_ha : null,
+                    'field' => Format::field($row->fmt_tenid),
+                ];
+            }
+        }
+
+        return array_values($out);
+    }
+
+    /** Whether h-data's places table exists yet (it ships separately). */
+    private static function hasPlaces(): bool
+    {
+        return (bool) DB::scalar("select to_regclass('public.places') is not null");
+    }
+
+    /**
+     * Towns and localities whose name starts with the query slug, exact
+     * names first, then towns, then shorter names.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function searchPlaces(string $slug): array
+    {
+        if (strlen($slug) < 3 || ! self::hasPlaces()) {
+            return [];
+        }
+
+        return array_map(fn ($r) => [
+            'kind' => 'place', 'slug' => (string) $r->id, 'name' => $r->name, 'place_kind' => $r->kind,
+            'lga' => $r->lga, 'center' => [round((float) $r->lng, 5), round((float) $r->lat, 5)], 'exact' => (bool) $r->exact,
+        ], DB::select(
+            "select id, name, kind, lga, ST_X(geom) as lng, ST_Y(geom) as lat, pw_slug(name) = ? as exact
+             from places where pw_slug(name) like ?
+             order by pw_slug(name) = ? desc, lower(coalesce(kind, '')) like 'town%' desc, length(name), name limit 3",
+            [$slug, "$slug%", $slug]
+        ));
+    }
+
+    /** One place's centre as [lng, lat], or null. */
+    public static function place(int $id): ?array
+    {
+        $p = self::hasPlaces()
+            ? DB::selectOne('select ST_X(geom) as lng, ST_Y(geom) as lat from places where id = ?', [$id])
+            : null;
+
+        return $p ? [round((float) $p->lng, 5), round((float) $p->lat, 5)] : null;
     }
 }
