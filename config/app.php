@@ -13,7 +13,9 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    // Page titles and the brand use App\Support\PageMeta::SITE_NAME, so a
+    // lower-case APP_NAME in the environment never reaches the UI.
+    'name' => env('APP_NAME', 'Pegwatch'),
 
     /*
     |--------------------------------------------------------------------------

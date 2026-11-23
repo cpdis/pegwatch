@@ -473,4 +473,79 @@ class Register
 
         return [min($xs), min($ys), max($xs), max($ys)];
     }
+
+    // g-visual: share previews, OG images and the data status page.
+
+    /**
+     * One tenement's facts for a share preview: the live or pending record,
+     * else its latest dead one. With $outline, also its shape as GeoJSON,
+     * simplified to about 2 m for drawing.
+     */
+    public static function tenementBrief(string $slug, bool $outline = false): ?object
+    {
+        $geom = $outline ? 'ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.00002), 6)' : 'null';
+
+        return DB::selectOne(
+            "select * from (
+               (select 0 as rank, fmt_tenid, type, status, survstatus, holders, legal_area, area_unit, area_ha,
+                       applied_at, granted_at, ends_at, null as death_reason, $geom as geojson
+                from tenements where pw_slug(fmt_tenid) = ? limit 1)
+               union all
+               (select 1, fmt_tenid, type, 'DEAD', null, holders, null, null, null,
+                       started_at, granted_at, ended_at, death_reason, $geom
+                from dead_tenements where pw_slug(fmt_tenid) = ? order by ended_at desc limit 1)
+             ) t order by rank limit 1",
+            [$slug, $slug]
+        );
+    }
+
+    /** A holder's name, whether every record calls it a company, and its live and pending counts. */
+    public static function holderBrief(string $slug): ?object
+    {
+        $h = DB::selectOne(
+            "select mode() within group (order by h.name) as name, bool_and(h.is_company) as is_company,
+                    count(*) filter (where t.status = 'LIVE') as live,
+                    count(*) filter (where t.status = 'PENDING') as pending,
+                    coalesce(sum(t.area_ha), 0) as area_ha
+             from tenements t cross join lateral unnest(t.holders, t.holder_is_company) as h(name, is_company)
+             where pw_holder_text(t.holders) like ? and pw_slug(h.name) = ?",
+            ['%'.$slug.'%', $slug]
+        );
+        if ($h->name !== null) {
+            return $h;
+        }
+
+        return DB::selectOne(
+            'select h.name, h.is_company, 0 as live, 0 as pending, 0 as area_ha
+             from dead_tenements d cross join lateral unnest(d.holders, d.holders_are_company) as h(name, is_company)
+             where pw_slugs(d.holders) @> array[?]::text[] and pw_slug(h.name) = ?
+             order by h.is_company limit 1',
+            [$slug, $slug]
+        );
+    }
+
+    /**
+     * The last nightly checks, newest first, each with its layers' extract
+     * times and row counts and the number of change events it found.
+     */
+    public static function recentRuns(int $limit = 30): array
+    {
+        $runs = DB::select(
+            'select r.id, r.started_at, r.finished_at, r.status, r.tenements_extract, r.stale,
+                    (select count(*) from tenement_events e where e.run_id = r.id) as events
+             from ingest_runs r order by r.id desc limit ?',
+            [$limit]
+        );
+        $layers = collect(DB::select(
+            'select run_id, layer_code, layer_key, fetched_rows, max_extract from layer_extracts
+             where run_id = any(?::bigint[]) order by layer_code',
+            ['{'.implode(',', array_map(fn ($r) => (int) $r->id, $runs)).'}']
+        ))->groupBy('run_id');
+
+        return array_map(fn ($r) => (object) [
+            ...(array) $r,
+            'events' => (int) $r->events,
+            'layers' => $layers->get($r->id, collect())->all(),
+        ], $runs);
+    }
 }
