@@ -121,7 +121,7 @@ row per change:
 | --- | --- |
 | `application` | new tenid with status PENDING |
 | `appeared` | new tenid already LIVE (e.g. a restoration) |
-| `death` | tenid gone from the live layer; reason from the DEAD layer (back-filled if it lags), `kind` = ended / converted / amalgamated, `uncovered_share` = share of the area with no other blocking live or pending tenement over it, `covered_any_share` counting every tenement |
+| `death` | tenid gone from the live layer; reason from the DEAD layer (back-filled if it lags), `kind` = ended / converted / amalgamated, `uncovered_share` = share of the area with no other blocking live or pending tenement over it (miscellaneous licences, general purpose leases and special prospecting licences do not block), `covered_any_share` counting every tenement |
 | `grant` / `status_change` | PENDING → LIVE, or any other status move |
 | `holder_change` | holder set changed (transfer, addition, removal) |
 | `shrink` / `grow` | geometry lost or gained at least 0.5 ha and 0.1% (partial surrender) |

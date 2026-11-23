@@ -50,6 +50,21 @@ language sql immutable as $$
   select name ~* '(\mPTY\M|\mLTD\M|\mLIMITED\M|\mCORP\M|\mINC\M|\mN\.?L\.?$|\mCOMPANY\M|\mTRUST\M|\mHOLDINGS\M|\mMINING\M|\mRESOURCES\M|\mMINERALS\M|\mGROUP\M|\mPARTNERSHIP\M|\mSHIRE\M|\mCOUNCIL\M|\mSTATE OF\M|\mMINISTER\M|\mCOMMISSION\M|\mAUTHORITY\M|\mCORPORATION\M|\mBHP\M|\mFORTESCUE\M|\mCOOPERATIVE\M|\mASSOCIATION\M|\mINCORPORATED\M)'
 $$;
 
+-- Special prospecting licences for gold may sit on someone else's ground. The
+-- live layer flags them in special_in; their IDs end in S ("P 27/2688-S").
+create or replace function pw_special_prospecting(type_code text, special_ind text, fmt_tenid text)
+returns boolean language sql immutable as $$
+  select coalesce(type_code = 'P' and (trim(special_ind) = 'S' or fmt_tenid ~ '[0-9]-?S$'), false)
+$$;
+
+-- Whether a tenement closes its ground to others. Miscellaneous licences,
+-- general purpose leases and special prospecting licences may overlap other tenure.
+create or replace function pw_blocks_ground(type_code text, special_ind text, fmt_tenid text)
+returns boolean language sql immutable as $$
+  select type_code not in ('L', 'G') and not pw_special_prospecting(type_code, special_ind, fmt_tenid)
+$$;
+drop function if exists pw_blocks_ground(text);
+
 create table if not exists ingest_runs (
   id            bigserial primary key,
   started_at    timestamptz not null default now(),
