@@ -7,7 +7,10 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
+
+import psycopg
 
 from . import db, notices, report
 from .layers import DEAD, NIGHTLY, TENEMENTS, Layer
@@ -17,6 +20,10 @@ log = logging.getLogger("pegwatch_ingest")
 
 # Abort rather than record mass "deaths" if the live layer comes back short.
 MIN_ROW_RATIO = 0.95
+
+# Tables the map and its cards read, refilled from tonight's snapshot in this
+# order, each by sql/<table>.sql inside the snapshot transaction.
+MAP_TABLES = ("coverage_lowzoom",)
 
 
 class IngestAborted(RuntimeError):
@@ -52,6 +59,27 @@ def fetch_layer(conn, client: SlipClient, run_id: int, layer: Layer, where: str)
     conn.commit()
     log.info("%s: %d rows, extract %s", layer.code, fetched, extract)
     return fetched
+
+
+def build_map_tables(conn, run_id: int) -> dict:
+    """Refill each map table under a savepoint, so one that fails keeps last
+    night's rows and the snapshot, diff and alerts still go ahead."""
+    out = {}
+    for table in MAP_TABLES:
+        start = time.monotonic()
+        conn.execute("savepoint map_table")
+        try:
+            db.run_script(conn, f"{table}.sql", run_id)
+        except psycopg.Error as exc:
+            conn.execute("rollback to savepoint map_table")
+            log.warning("%s not rebuilt, keeping the previous rows: %s", table, exc)
+            out[table] = {"error": str(exc).strip()}
+            continue
+        conn.execute("release savepoint map_table")
+        out[table] = {"rows": db.scalar(conn, f"select count(*) from {table}"),
+                      "seconds": round(time.monotonic() - start, 1)}
+        log.info("%s: %d rows in %.1fs", table, out[table]["rows"], out[table]["seconds"])
+    return out
 
 
 def run(dsn: str, dead_days: int | None, full_dead: bool, skip_fetch: bool,
@@ -97,12 +125,14 @@ def run(dsn: str, dead_days: int | None, full_dead: bool, skip_fetch: bool,
         baseline = not existing
         if not baseline:
             db.run_script(conn, "diff.sql", run_id)
+        map_tables = build_map_tables(conn, run_id)
         status = "baseline" if baseline else "ok"
         with conn.cursor() as cur:
             cur.execute(
                 "update ingest_runs set finished_at = now(), status = %s, tenements_extract = %s,"
-                " previous_extract = %s, stale = %s where id = %s",
-                (status, extract, prev_extract, stale, run_id))
+                " previous_extract = %s, stale = %s,"
+                " notes = notes || jsonb_build_object('map_tables', %s::jsonb) where id = %s",
+                (status, extract, prev_extract, stale, json.dumps(map_tables), run_id))
         conn.commit()
     except Exception as exc:
         conn.rollback()

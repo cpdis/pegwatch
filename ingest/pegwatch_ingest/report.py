@@ -74,6 +74,11 @@ def markdown(s: dict) -> str:
     out += ["", "| Layer | Rows | Extract |", "| --- | ---: | --- |"]
     out += [f"| {l['layer_code']} {l['layer_key']} | {l['fetched_rows']:,} | {_fmt(l['max_extract'])} |"
             for l in s["layers"]]
+    built = (run.get("notes") or {}).get("map_tables")
+    if built:
+        out += ["", "| Map table | Rows | Seconds |", "| --- | ---: | ---: |"]
+        out += [f"| {t} | not rebuilt, kept last run's rows: {b['error'][:160]} | |" if "error" in b
+                else f"| {t} | {b['rows']:,} | {b['seconds']} |" for t, b in built.items()]
     if run["status"] == "baseline":
         out += ["", "Baseline run: no previous snapshot, so no events."]
         return "\n".join(out + _history(s)) + "\n"

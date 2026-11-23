@@ -194,13 +194,15 @@ def test_company_detection(conn):
 
 READ_TABLES = ("tenements", "tenements_prev", "release_pending", "release_pending_prev",
                "amalgamation_pending", "amalgamation_pending_prev", "restoration_pending",
-               "land_restrictions", "dead_tenements", "tenement_events")
+               "land_restrictions", "dead_tenements", "tenement_events", *runner.MAP_TABLES)
 
 
 def test_readers_not_blocked_during_snapshot(conn, monkeypatch):
     """The app keeps reading last night's data while the snapshot and diff run."""
     stage(conn, night1())
     runner.run(DSN, None, False, True, None, min_row_ratio=0, check_notices=False)
+    before = {t: conn.execute(f"select count(*) from {t}").fetchone()[0] for t in READ_TABLES}
+    conn.commit()
     stage(conn, night2())
 
     seen = {}
@@ -218,6 +220,9 @@ def test_readers_not_blocked_during_snapshot(conn, monkeypatch):
     # Before the commit, readers see the old snapshot: night 1's ten tenements.
     assert seen[("snapshot.sql", "tenements")] == 10
     assert seen[("diff.sql", "tenements")] == 10
+    # Each map table refills without locking readers out, who still see last night's rows.
+    for table in runner.MAP_TABLES:
+        assert seen[(f"{table}.sql", table)] == before[table]
     with conn.cursor() as cur:
         cur.execute("select count(*) from tenements")
         assert cur.fetchone()[0] == len(night2())

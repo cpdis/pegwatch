@@ -203,3 +203,15 @@ create table if not exists tenement_events (
 select pw_ensure_index('tenement_events_run_idx', 'tenement_events (run_id)');
 select pw_ensure_index('tenement_events_type_idx', 'tenement_events (event_type, created_at)');
 select pw_ensure_index('tenement_events_geom_idx', 'tenement_events using gist (geom)');
+
+-- Tables the map and its cards read, refilled from each snapshot inside its
+-- transaction (sql/<table>.sql) with DELETE and INSERT, so readers keep last
+-- night's rows until the commit.
+
+-- State view below zoom 8: current blocking ground by status and type group.
+create table if not exists coverage_lowzoom (
+  status     text not null,          -- LIVE | PENDING
+  type_group text not null,          -- E | P | M | other
+  geom       geometry(MultiPolygon, 4326) not null
+);
+select pw_ensure_index('coverage_lowzoom_geom_idx', 'coverage_lowzoom using gist (geom)');
