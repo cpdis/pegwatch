@@ -7,6 +7,7 @@ import { attachCard } from './card.js';
 import { addControls, attachControls } from './controls.js';
 import { attachUrlState, layersFrom, parseHash } from './url.js';
 import { attachDraw } from './draw.js';
+import { attachFilters } from './filters.js';
 import { circlePolygon } from './util.js';
 
 export default function tenementMap(config = {}) {
@@ -57,16 +58,48 @@ export default function tenementMap(config = {}) {
                 addLayers(map);
                 attachRendering(map, this);
                 const card = attachCard(map, this);
+                const filters = attachFilters(map);
                 cleanups.push(card.destroy, attachControls(map, this, card, { full }));
                 if (full) cleanups.push(attachUrlState(map, this, card, defaults)); // embedded maps leave the URL alone
                 attachDraw(map, this);
+                this.listen(card, filters);
                 ready = true;
                 this.sync();
+                this.moved();
             });
 
             this.$watch('layers', () => this.sync(), { deep: true });
             this.$watch('circle', () => this.sync());
             this.$watch('hovered', () => this.sync());
+        },
+
+        /** The panel's window events (contracts.md). */
+        listen(card, filters) {
+            const on = (name, fn) => {
+                const handler = (e) => fn(e.detail ?? {});
+                window.addEventListener(name, handler);
+                cleanups.push(() => window.removeEventListener(name, handler));
+            };
+            on('map-filter', (d) => filters.apply(d));
+            on('map-layers', (d) => Object.assign(this.layers, d.layers ?? {}));
+            on('map-select', (d) => card.select(d.tenid ?? null));
+            on('map-fly', (d) => {
+                if (d.bounds) map.fitBounds(d.bounds, { padding: 40, maxZoom: 14 });
+                else if (d.center) map.flyTo({ center: d.center, zoom: d.zoom ?? Math.max(map.getZoom(), 12) });
+            });
+            map.on('moveend', () => this.moved());
+        },
+
+        /** Tell the panel what is in view. */
+        moved() {
+            const b = map.getBounds();
+            const c = map.getCenter();
+            const r = (v) => +v.toFixed(5);
+            window.dispatchEvent(
+                new CustomEvent('map-moved', {
+                    detail: { bounds: [r(b.getWest()), r(b.getSouth()), r(b.getEast()), r(b.getNorth())], zoom: +map.getZoom().toFixed(2), center: [r(c.lng), r(c.lat)] },
+                }),
+            );
         },
 
         destroy() {
