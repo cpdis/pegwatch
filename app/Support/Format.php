@@ -15,6 +15,9 @@ class Format
 
     public const OTHER_COLOUR = '#0f766e';
 
+    /** What "uncovered" leaves out, as pw_blocks_ground does: said wherever uncovered ground is. */
+    public const UNCOUNTED = 'not counting miscellaneous licences, general purpose leases or special prospecting licences';
+
     /** The department's TENGRAPH page, the place users must confirm anything Pegwatch shows. */
     public const TENGRAPH_URL = 'https://www.wa.gov.au/service/natural-resources/mineral-resources/access-tengraph-web';
 

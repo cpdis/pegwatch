@@ -104,8 +104,8 @@ const KINDS = {
         rows: (p, status, cfg) => [
             esc(typeLine(p, cfg)),
             holderLine(p),
-            p.uncovered_ha != null ? esc(`${ha(p.uncovered_ha)} with no live or pending tenement over it on the register`) : '',
-            esc([sentence(p.reason), formatDay(p.ended_at)].filter(Boolean).join(' ')),
+            p.uncovered_ha != null ? esc(`${ha(p.uncovered_ha)} with no live or pending tenement over it, L, G and special prospecting licences aside`) : '',
+            esc([sentence(p.reason), formatDay(p.ended)].filter(Boolean).join(' ')),
         ],
     },
     restrictions: {

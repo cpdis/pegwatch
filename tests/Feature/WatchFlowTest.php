@@ -9,6 +9,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -250,6 +251,15 @@ class WatchFlowTest extends TestCase
 
         $this->assertDatabaseHas('users', ['id' => $user->id]);
         $this->assertDatabaseHas('watch_areas', ['id' => $area->id]);
+    }
+
+    public function test_the_browser_cannot_swap_in_its_own_shape(): void
+    {
+        // What `$wire.set('shape', …)` would send: a 2,000 km circle that skips the 1 to 50 km and WA checks.
+        $this->expectException(CannotUpdateLockedPropertyException::class);
+        Livewire::test('watch-this-area')
+            ->call('setShape', ['kind' => 'circle', 'center' => [121.5, -30.8], 'radiusKm' => 5])
+            ->set('shape', ['kind' => 'circle', 'lng' => 121.5, 'lat' => -30.8, 'radiusKm' => 2000.0, 'tenid' => null, 'holderSlug' => null, 'label' => null]);
     }
 
     public function test_the_map_page_carries_the_watch_panel(): void

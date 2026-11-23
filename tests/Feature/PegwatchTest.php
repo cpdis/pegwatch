@@ -54,7 +54,7 @@ class PegwatchTest extends TestCase
             ->assertSeeText('2 tenements in view')
             ->assertSeeInOrder(['Live', '1', 'Pending', '1'])
             ->assertSee('P 15/9')
-            ->assertSee('Surrendered. 97% of its area has no other tenement over it.');
+            ->assertSee('Surrendered. 97% of its area has no other live or pending tenement over it, L, G and special prospecting licences aside.');
     }
 
     public function test_tenement_page_shows_holders_and_overlaps(): void

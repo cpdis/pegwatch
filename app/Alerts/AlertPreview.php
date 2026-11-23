@@ -62,7 +62,7 @@ final class AlertPreview
             'subject' => 'Kalgoorlie: 1 release scheduled, 1 tenement dead',
             'items' => [
                 ['id' => 'E 26/180', 'meta' => 'Exploration licence', 'line' => 'Part releases Wed 2 Dec 2026, 8:30am AWST (in 9 days). Applications lodged in the first 15 minutes go to ballot.'],
-                ['id' => 'P 26/4512', 'meta' => 'Prospecting licence', 'line' => 'Surrendered on 16 Nov 2026. 112 ha uncovered (93% of 120.4 ha): no other live or pending tenement over it on the register.'],
+                ['id' => 'P 26/4512', 'meta' => 'Prospecting licence', 'line' => 'Surrendered on 16 Nov 2026. 112 ha uncovered (93% of 120.4 ha): no other live or pending tenement over it on the register, '.Format::UNCOUNTED.'.'],
             ],
         ];
     }

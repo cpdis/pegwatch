@@ -24,6 +24,8 @@ new class extends Component {
     #[Locked]
     public bool $compact = false;
 
+    /** Only setShape() makes one, through WatchShape's checked factories (1 to 50 km, inside WA). */
+    #[Locked]
     public ?WatchShape $shape = null;
 
     public string $name = '';

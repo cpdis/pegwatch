@@ -191,6 +191,11 @@ class TenementPageTest extends TestCase
         // A special prospecting licence inside the uncovered part does not block it either.
         self::tenement('P 47/1-S', ['type' => 'PROSPECTING LICENCE', 'special_ind' => 'S', 'applied_at' => '2021-01-01 09:00:00', 'geom' => self::box(117.34, -20.975, 0.004)]);
 
+        // The map link waits until the death is in the freed-ground layer.
+        $this->get('/tenements/e-47-5271')->assertDontSee('See freed ground on the map');
+        DB::insert("insert into freed_ground (tenid, fmt_tenid, ended_at, uncovered_ha, geom) values ('E 47/5271', 'E 47/5271', '2026-11-17 08:30:00', 300, ?::geometry)",
+            [self::box(117.338, -20.98, 0.012, 0.02)]);
+
         $this->assertInOrder($this->text('/tenements/e-47-5271'), [
             'Exploration licence · Dead (withdrawn)',
             'Exploration licence applied for by AUSTRALIA MINERAL PROSPECTS PTY LTD on 22 Nov 2024 and withdrawn on 17 Nov 2026, after 1 year 11 months.',

@@ -161,7 +161,8 @@ class SearchTest extends TestCase
             "insert into places (id, name, kind, lga, geom) values
                (901, 'Leonora', 'town', 'Shire of Leonora', 'SRID=4326;POINT(121.33 -28.884)'),
                (902, 'Leonora North', 'locality', 'Shire of Leonora', 'SRID=4326;POINT(121.35 -28.8)'),
-               (903, 'Acme Creek', 'locality', null, 'SRID=4326;POINT(120 -29)')"
+               (903, 'Acme Creek', 'locality', null, 'SRID=4326;POINT(120 -29)'),
+               (904, 'Mount Magnet', 'town', 'Shire of Mount Magnet', 'SRID=4326;POINT(117.85 -28.06)')"
         );
         DB::insert(
             "insert into tenements (tenid, fmt_tenid, type, status, holders, holder_is_company, extract_at) values
@@ -173,6 +174,8 @@ class SearchTest extends TestCase
         // Three letters could be a company as easily as a town: holders first.
         $this->assertSame('ACME GOLD PTY LTD', self::labels(Register::search('acm'))[0]);
         $this->assertSame('Acme Creek', self::labels(Register::search('acme c'))[0]);
+        // Tenement pages say "Mt Magnet district"; the ABS says "Mount Magnet".
+        $this->assertSame('Mount Magnet', self::labels(Register::search('mt magnet'))[0]);
 
         Livewire::test('search')->set('q', 'leonora')->assertSee('Leonora')->assertSee('Town · Shire of Leonora')
             ->call('go')->assertNoRedirect()->assertSet('q', '')

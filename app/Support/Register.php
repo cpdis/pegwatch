@@ -165,6 +165,8 @@ class Register
             'restrictions' => self::restrictions($geom),
             'actions' => self::pendingActions($tenid),
             'uncovered' => $dead ? self::uncoveredShare($geom) : null,
+            // Freed ground holds recent deaths only; link the map's layer only when this one is on it.
+            'freed' => $dead && DB::table('freed_ground')->where('tenid', $tenid)->exists(),
             'held_before' => self::heldBefore($geom, $tenid),
             'neighbours' => self::neighbours($geom, $tenid, $holders, array_column($overlaps, 'fmt_tenid')),
             'holder_context' => self::holderContext($row->holders, $geom, $tenid),
@@ -388,7 +390,7 @@ class Register
                 'amalgamated' => 'Amalgamated ('.($d['amalgamation_id'] ?? '').')',
                 default => trim(($d['death_reason'] ?? 'Ended').'. '.(isset($d['uncovered_share']) && (float) $d['uncovered_share'] < 0.005
                     ? 'Other tenements cover all of it.'
-                    : ($pct($d['uncovered_share'] ?? null) ?? '?').' of its area has no other tenement over it.')),
+                    : ($pct($d['uncovered_share'] ?? null) ?? '?').' of its area has no other live or pending tenement over it, L, G and special prospecting licences aside.')),
             },
             'application' => ($d['area_ha'] ?? '?').' ha applied for',
             'grant' => 'Pending to live',
@@ -1181,14 +1183,17 @@ class Register
             return [];
         }
 
+        // The site writes "Mt Magnet" (the field names); the ABS writes "Mount Magnet".
+        $alt = preg_replace('/(^|-)mt(-|$)/', '$1mount$2', $slug);
+
         return array_map(fn ($r) => [
             'kind' => 'place', 'slug' => (string) $r->id, 'name' => $r->name, 'place_kind' => $r->kind,
             'lga' => $r->lga, 'center' => [round((float) $r->lng, 5), round((float) $r->lat, 5)], 'exact' => (bool) $r->exact,
         ], DB::select(
-            "select id, name, kind, lga, ST_X(geom) as lng, ST_Y(geom) as lat, pw_slug(name) = ? as exact
-             from places where pw_slug(name) like ?
-             order by pw_slug(name) = ? desc, lower(coalesce(kind, '')) like 'town%' desc, length(name), name limit 3",
-            [$slug, "$slug%", $slug]
+            "select id, name, kind, lga, ST_X(geom) as lng, ST_Y(geom) as lat, pw_slug(name) in (?, ?) as exact
+             from places where pw_slug(name) like ? or pw_slug(name) like ?
+             order by pw_slug(name) in (?, ?) desc, lower(coalesce(kind, '')) like 'town%' desc, length(name), name limit 3",
+            [$slug, $alt, "$slug%", "$alt%", $slug, $alt]
         ));
     }
 

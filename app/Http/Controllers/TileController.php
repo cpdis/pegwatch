@@ -63,7 +63,7 @@ class TileController extends Controller
                                            (select to_char(min(r.release_at at time zone 'Australia/Perth'), 'YYYY-MM-DD HH24:MI')
                                               from release_pending r where r.tenid = t.tenid) as rel_at,
                                            t.survstatus,
-                                           nullif(t.special_ind = 'S' or t.fmt_tenid like '%S', false) as special,
+                                           nullif(pw_special_prospecting(t.type_code, t.special_ind, t.fmt_tenid), false) as special,
                                            c.event_type as changed_type,
                                            to_char(c.detected_at at time zone 'Australia/Perth', 'YYYY-MM-DD') as changed_at
                                     from (select) one left join {recent_changes} c on c.tenid = t.tenid

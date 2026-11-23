@@ -38,8 +38,8 @@
                 <p class="mt-1.5 text-lg font-medium leading-snug">
                     @if ($lead['kind'] === 'freed')
                         {!! $tenLink($e) !!}
-                        {{ $e['reason'] ? __('ended (:reason), and :ha of it has no other tenement over it.', ['reason' => strtolower($e['reason']), 'ha' => $ha($e['uncovered_ha'])])
-                            : __('ended, and :ha of it has no other tenement over it.', ['ha' => $ha($e['uncovered_ha'])]) }}
+                        {{ $e['reason'] ? __('ended (:reason), and :ha of it has no other live or pending tenement over it (L, G and special prospecting licences aside).', ['reason' => strtolower($e['reason']), 'ha' => $ha($e['uncovered_ha'])])
+                            : __('ended, and :ha of it has no other live or pending tenement over it (L, G and special prospecting licences aside).', ['ha' => $ha($e['uncovered_ha'])]) }}
                     @else
                         {!! $holderLinks($e['holders']) !!} {{ __('applied for') }} {!! $tenLink($e) !!}{{ __(', :ha, the biggest application of the week.', ['ha' => $ha($e['area_ha'])]) }}
                     @endif

@@ -161,9 +161,9 @@ class WatchAreaDigest extends Mailable
         if (isset($d['uncovered_share'], $d['area_ha'])) {
             $ha = (float) $d['area_ha'] * (float) $d['uncovered_share'];
             $line .= ' '.number_format($ha, $ha < 10 ? 1 : 0).' ha uncovered ('.Format::pct($d['uncovered_share']).' of '.number_format((float) $d['area_ha'], 1).' ha):'
-                .' no other live or pending tenement over it on the register, apart from miscellaneous licences and general purpose leases.';
+                .' no other live or pending tenement over it on the register, '.Format::UNCOUNTED.'.';
         } elseif (isset($d['uncovered_share'])) {
-            $line .= ' '.Format::pct($d['uncovered_share']).' of its area has no other live or pending tenement over it on the register.';
+            $line .= ' '.Format::pct($d['uncovered_share']).' of its area has no other live or pending tenement over it on the register, '.Format::UNCOUNTED.'.';
         }
 
         return $line;

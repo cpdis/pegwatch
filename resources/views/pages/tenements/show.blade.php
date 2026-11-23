@@ -51,7 +51,7 @@ new class extends Component {
 
     // The home map centred here with freed ground on (dead tenements, T8).
     $freedUrl = null;
-    if ($t['dead'] && $data['bbox']) {
+    if ($t['dead'] && ($data['freed'] ?? false) && $data['bbox']) {
         [$w, $s, $e, $n] = $data['bbox'];
         $zoom = max(8, min(14, (int) floor(log(360 * 600 / (512 * max($e - $w, $n - $s, 0.0001)), 2))));
         $freedUrl = url('/').'#map='.$zoom.'/'.round(($s + $n) / 2, 5).'/'.round(($w + $e) / 2, 5).'&l=tenements,pending,dead,freed';

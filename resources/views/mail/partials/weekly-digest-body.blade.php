@@ -19,7 +19,7 @@
 @if ($lead)
 @php($e = $lead['item'])
 @if ($lead['kind'] === 'freed')
-**The week's biggest change: {{ $ten($e) }} ended{{ $e['reason'] ? ' ('.strtolower($e['reason']).')' : '' }}, and {{ $ha($e['uncovered_ha']) }} of it has no other tenement over it.** {{ $meta([$type($e), $holders($e['holders']), $field($e['fmt_tenid'])]) }}
+**The week's biggest change: {{ $ten($e) }} ended{{ $e['reason'] ? ' ('.strtolower($e['reason']).')' : '' }}, and {{ $ha($e['uncovered_ha']) }} of it has no other live or pending tenement over it (L, G and special prospecting licences aside).** {{ $meta([$type($e), $holders($e['holders']), $field($e['fmt_tenid'])]) }}
 @else
 **The week's biggest change: {{ $holders($e['holders']) }} applied for {{ $ten($e) }}, {{ $ha($e['area_ha']) }}.** {{ $meta([$type($e), $field($e['fmt_tenid'])]) }}
 @endif

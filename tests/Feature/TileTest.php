@@ -131,6 +131,21 @@ class TileTest extends TestCase
         $this->assertEquals(10, $tile['P 15/3-S']['props']['ha']);
     }
 
+    public function test_only_special_prospecting_licences_are_special(): void
+    {
+        self::seedRegister();
+        // Offshore exploration licences end in "S" too ("WA-1-EOS"); they are not special prospecting licences.
+        DB::insert(
+            "insert into tenements (tenid, fmt_tenid, type, type_code, status, holders, holder_is_company, area_ha, extract_at, geom)
+             values ('WA-1-EOS', 'WA-1-EOS', 'EXPLORATION LICENCE (OFFSHORE)', 'EOS', 'LIVE', '{\"ACME GOLD PTY LTD\"}', '{t}', 50, now(), ?::geometry)",
+            [self::square(121.52, -30.81)]
+        );
+
+        $tile = $this->tile('tenements', 8)['tenements'];
+        $this->assertArrayNotHasKey('special', $tile['WA-1-EOS']['props']);
+        $this->assertTrue($tile['P 15/3-S']['props']['special']);
+    }
+
     public function test_tenements_get_one_label_point_each_from_zoom_12(): void
     {
         self::seedRegister();

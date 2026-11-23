@@ -142,7 +142,7 @@ new #[Layout('layouts::map'), Title('WA tenement map')] class extends Component 
     $kindNames = Format::TYPE_NAMES + ['other' => __('Other')];
     $layerRows = [
         'releases' => [__('Release due (compulsory surrender)'), Format::STATUS_COLOURS['release'], null],
-        'freed' => [__('Freed ground'), '#16a34a', __('Part of a recent death with no live or pending tenement over it on the register.')],
+        'freed' => [__('Freed ground'), '#16a34a', __('Part of a recent death with no live or pending tenement over it on the register. L and G licences and special prospecting licences are not counted.')],
         'dead' => [$deadLabel, Format::STATUS_COLOURS['dead'], null],
         'restrictions' => [__('Closed or restricted land (s19, s57, FNAs)'), Format::STATUS_COLOURS['restricted'], null],
         'norecord' => [__('No recorded tenement'), '#a3a3a3', __('No live or pending tenement on the register as at :date. A screening aid, not a sign the ground can be applied for.', ['date' => Format::awst($extract, false)])],
