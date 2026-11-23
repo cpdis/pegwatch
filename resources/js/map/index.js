@@ -12,6 +12,7 @@ import { circlePolygon } from './util.js';
 export default function tenementMap(config = {}) {
     let map = null;
     let ready = false;
+    const cleanups = [];
 
     return {
         layers: { ...DEFAULT_LAYERS, ...(config.layers ?? {}) },
@@ -20,6 +21,8 @@ export default function tenementMap(config = {}) {
         circle: config.circle ?? null,
         hovered: null,
         pick: config.pick ?? false,
+        /** Slug of the tenement the pinned card shows. */
+        selection: null,
 
         async init() {
             // MapLibre is about 1 MB, so only pages with a map load it.
@@ -34,9 +37,11 @@ export default function tenementMap(config = {}) {
             });
             addControls(map, maplibregl);
 
+            // Only a basemap style that never loaded falls back. A tile error (sourceId set) must
+            // not: swapping the style then would drop every Pegwatch layer.
             let fellBack = false;
             map.on('error', (e) => {
-                if (!fellBack && !map.isStyleLoaded() && /style|fetch|Failed/i.test(String(e.error?.message ?? ''))) {
+                if (!fellBack && !ready && !e.sourceId && !map.isStyleLoaded() && /style|fetch|Failed/i.test(String(e.error?.message ?? ''))) {
                     fellBack = true;
                     map.setStyle(BLANK_STYLE);
                 }
@@ -45,7 +50,8 @@ export default function tenementMap(config = {}) {
             map.on('load', () => {
                 addLayers(map);
                 attachRendering(map, this);
-                attachCard(map, maplibregl, this);
+                const card = attachCard(map, this);
+                cleanups.push(card.destroy);
                 attachControls(map, this);
                 attachUrlState(map, this);
                 attachDraw(map, this);
@@ -59,6 +65,7 @@ export default function tenementMap(config = {}) {
         },
 
         destroy() {
+            cleanups.splice(0).forEach((fn) => fn());
             map?.remove();
             map = null;
             ready = false;
