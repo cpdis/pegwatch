@@ -287,7 +287,6 @@ class TenementPageTest extends TestCase
         self::pendingLease();
         $this->assertStringContainsString('Kanowna district, North East Coolgardie mineral field', $this->text('/tenements/m-27-518'));
 
-        DB::statement('create table places (id serial primary key, name text, kind text, lga text, geom geometry(Point, 4326))');
         // Kalgoorlie about 12 km south-west of the tenement's centre.
         DB::insert("insert into places (name, kind, geom) values
             ('Kalgoorlie', 'town', ST_SetSRID(ST_MakePoint(121.4144, -30.8673), 4326)),

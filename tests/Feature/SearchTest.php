@@ -154,10 +154,9 @@ class SearchTest extends TestCase
 
     public function test_places_lead_for_a_town_name_and_fly_the_map_there(): void
     {
-        // Before h-data ships the places table, search works without it.
+        // An empty places table gives no place rows.
         $this->assertSame([], array_filter(Register::search('leonora'), fn ($r) => $r['kind'] === 'place'));
 
-        DB::statement('create table if not exists places (id serial primary key, name text, kind text, lga text, geom geometry(Point, 4326))');
         DB::insert(
             "insert into places (id, name, kind, lga, geom) values
                (901, 'Leonora', 'town', 'Shire of Leonora', 'SRID=4326;POINT(121.33 -28.884)'),
