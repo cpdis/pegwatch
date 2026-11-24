@@ -47,6 +47,7 @@ Route::post('hooks/ingest-complete', IngestHookController::class)
 // session or cookies (so a CDN can cache them); the area image needs a
 // signed URL.
 Route::livewire('data', 'pages::data')->name('data');
+Route::livewire('how-people-use-pegwatch', 'pages::use-cases')->name('use-cases');
 Route::get('og/tenements/{slug}.png', [OgImageController::class, 'tenement'])
     ->where('slug', '[a-z0-9-]+')->withoutMiddleware('web')->name('og.tenement');
 Route::get('og/areas/{watchArea}.png', [OgImageController::class, 'area'])

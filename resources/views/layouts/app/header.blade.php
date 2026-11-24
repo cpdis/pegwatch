@@ -112,6 +112,7 @@
                 {{ __('and with the Mining Registrar. Data © State of WA') }}
                 (<abbr class="no-underline" title="Department of Mines, Petroleum and Exploration">DMPE</abbr>), CC BY 4.0, {{ __('changes made.') }}
                 <a class="ms-1 font-medium whitespace-nowrap text-white underline decoration-accent underline-offset-2" href="{{ route('data') }}" wire:navigate>{{ __('Data and disclaimer') }}</a>
+                <a class="ms-1 font-medium whitespace-nowrap text-white underline decoration-accent underline-offset-2" href="{{ route('use-cases') }}" wire:navigate>{{ __('How people use it') }}</a>
                 <a class="ms-1 font-medium whitespace-nowrap text-white underline decoration-accent underline-offset-2" href="{{ route('agents') }}" wire:navigate>{{ __('For agents') }}</a>
             </p>
         </footer>

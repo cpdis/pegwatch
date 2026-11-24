@@ -144,7 +144,7 @@ new #[Layout('layouts::map'), Title('WA tenement map')] class extends Component 
         'releases' => [__('Release due (compulsory surrender)'), Format::STATUS_COLOURS['release'], null],
         'freed' => [__('Freed ground'), '#16a34a', __('Part of a recent death with no live or pending tenement over it on the register. L and G licences and special prospecting licences are not counted.')],
         'dead' => [$deadLabel, Format::STATUS_COLOURS['dead'], null],
-        'restrictions' => [__('Closed or restricted land (s19, s57, FNAs)'), Format::STATUS_COLOURS['restricted'], null],
+        'restrictions' => [__('Closed or restricted land (s19, s57, FNAs, clearance areas)'), Format::STATUS_COLOURS['restricted'], __('The department\'s open land layers. Townsites, reserves, Commonwealth land, state forest and private land are not shown and can need consent.')],
         'norecord' => [__('No recorded tenement'), '#a3a3a3', __('No live or pending tenement on the register as at :date. A screening aid, not a sign the ground can be applied for.', ['date' => Format::awst($extract, false)])],
         'grid' => [__('One-minute blocks'), '#737373', __('The graticular blocks exploration licences are applied for by, from zoom 11.')],
     ];

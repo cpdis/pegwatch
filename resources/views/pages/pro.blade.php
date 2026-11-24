@@ -117,6 +117,7 @@ new #[Title('Plans')] class extends Component {
     <flux:text class="mt-2 max-w-2xl text-base">
         {{ __('The map, one watch area and one holder watch stay free. Prospector adds every alert type, unlimited watches, and exports for your GPS and detector apps.') }}
     </flux:text>
+    <flux:link class="mt-2 inline-block text-sm" :href="route('use-cases')" wire:navigate>{{ __('See how a prospector, a tenement manager, an investor and a consultant might use it') }}</flux:link>
 
     @if ($thanks === 'paid')
         <flux:callout class="mt-6" icon="check-circle" variant="success" :heading="__('Thank you, your pre-order is in')">

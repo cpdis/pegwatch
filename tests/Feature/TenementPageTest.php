@@ -365,4 +365,32 @@ class TenementPageTest extends TestCase
         $this->get('/tenements/m-27-518')->assertSee(route('watch.start', ['tenement' => 'm-27-518']))
             ->assertSee('Watch this tenement');
     }
+
+    public function test_the_registrar_email_is_prewritten_for_each_office_and_names_no_holder(): void
+    {
+        self::pendingLease();
+
+        $html = $this->get('/tenements/m-27-518')->assertOk()->getContent();
+        $this->assertStringContainsString('Email the Mining Registrar', $html);
+        $this->assertSame(7, substr_count($html, 'mailto:mineraltitles.'));
+
+        preg_match('~href="(mailto:mineraltitles\.kalgoorlie@dmpe\.wa\.gov\.au\?[^"]+)"~', $html, $m);
+        $this->assertNotEmpty($m, 'Kalgoorlie mailto link');
+        parse_str(parse_url(html_entity_decode($m[1]), PHP_URL_QUERY), $q);
+        $this->assertSame('Enquiry about the ground at M 27/518', $q['subject']);
+        $this->assertStringContainsString('I am looking at the ground covered by M 27/518, mining lease, pending on the register', $q['body']);
+        $this->assertStringContainsString('not yet shown in TENGRAPH', $q['body']);
+        $this->assertStringContainsString(route('tenements.show', 'm-27-518'), $q['body']);
+        $this->assertStringNotContainsString('YANDAL', $q['body']);
+    }
+
+    public function test_the_page_names_the_land_pegwatch_cannot_check(): void
+    {
+        self::pendingLease();
+
+        $this->assertStringContainsString(
+            'It cannot check townsites, Commonwealth land, national parks and class A reserves, state forest, Aboriginal reserves or private land',
+            $this->text('/tenements/m-27-518')
+        );
+    }
 }

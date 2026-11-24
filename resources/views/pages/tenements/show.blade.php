@@ -2,6 +2,7 @@
 
 use App\Support\Format;
 use App\Support\Register;
+use App\Support\Registrar;
 use App\Support\TenementSummary;
 use Livewire\Component;
 
@@ -32,6 +33,9 @@ new class extends Component {
     $pageUrl = route('tenements.show', $t['slug']);
     $watchUrl = Route::has('watch.start') ? route('watch.start', ['tenement' => $t['slug']]) : null;
     $location = TenementSummary::locationLine($data);
+    $registrarMail = Registrar::mailtos($t['fmt_tenid'], $type, match ($state) {
+        'expired' => 'live but past its expiry date', default => $state,
+    }, $location, $pageUrl);
     $sameHolderApplication = collect($data['overlaps'])->first(fn ($o) => $o['same_holder'] && $o['status'] === 'PENDING');
     $overlapNote = __('Lodgement order is from the register. Priority under the Mining Act can depend on marking out, which no dataset shows. Confirm with the Mining Registrar.');
 
@@ -111,6 +115,15 @@ new class extends Component {
                 <flux:button size="sm" variant="primary" icon="bell-alert" :href="$watchUrl" wire:navigate>{{ __('Watch this tenement') }}</flux:button>
             @endif
             <flux:button size="sm" icon-trailing="arrow-top-right-on-square" :href="Format::TENGRAPH_URL" target="_blank" rel="noreferrer">TENGRAPH</flux:button>
+            <flux:dropdown data-test="registrar-email">
+                <flux:button size="sm" icon="envelope" icon-trailing="chevron-down">{{ __('Email the Mining Registrar') }}</flux:button>
+                <flux:menu>
+                    <flux:menu.heading>{{ __('A prewritten enquiry to the office for this ground') }}</flux:menu.heading>
+                    @foreach ($registrarMail as $office => $mailto)
+                        <flux:menu.item :href="$mailto">{{ $office }}</flux:menu.item>
+                    @endforeach
+                </flux:menu>
+            </flux:dropdown>
             <flux:button size="sm" icon="link" x-on:click="navigator.clipboard.writeText({{ Js::from($pageUrl) }}); $flux.toast({{ Js::from(__('Link copied')) }})">{{ __('Copy link') }}</flux:button>
             <flux:button size="sm" icon="share" style="display: none" x-show="'share' in navigator"
                 x-on:click="navigator.share({ title: {{ Js::from($t['fmt_tenid']) }}, text: {{ Js::from(TenementSummary::headlineText($data)) }}, url: {{ Js::from($pageUrl) }} }).catch(() => {})">{{ __('Share') }}</flux:button>
@@ -237,6 +250,10 @@ new class extends Component {
                     </flux:callout.text>
                 </flux:callout>
             @endif
+
+            <flux:text class="text-xs" data-test="unchecked-land">
+                {{ __('Pegwatch checks the department\'s open land layers: Section 19, Section 57(4) and 57(2aa), file notation areas and general clearance areas. It cannot check townsites, Commonwealth land, national parks and class A reserves, state forest, Aboriginal reserves or private land, which can need consent before marking out. Ask the Mining Registrar.') }}
+            </flux:text>
 
             @foreach ($data['actions'] as $a)
                 <flux:callout icon="arrows-pointing-in" data-test="pending-action">
