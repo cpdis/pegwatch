@@ -1136,13 +1136,16 @@ class Register
                  where pw_compact(fmt_tenid) like ? order by pw_compact(fmt_tenid), fmt_tenid limit ?",
                 [...$bind, $compact.'%', $limit]
             ),
-            // Dead tenements have pages too. Skip any ID that is live again.
+            // Dead tenements have pages too. Skip any ID that is live again. The
+            // outer order matters: the anti-join can reorder the subquery's rows,
+            // and the first row per ID (its latest death) is the one kept.
             ...DB::select(
                 "select fmt_tenid, type, 'DEAD' as status, death_reason,
                         ST_Area(geom::geography) / 10000 as area_ha, 1 as dead, $rank from (
                    select fmt_tenid, type, death_reason, geom, ended_at from dead_tenements
                    where pw_compact(fmt_tenid) like ? order by pw_compact(fmt_tenid), ended_at desc limit ?
-                 ) d where not exists (select 1 from tenements t where pw_slug(t.fmt_tenid) = pw_slug(d.fmt_tenid))",
+                 ) d where not exists (select 1 from tenements t where pw_slug(t.fmt_tenid) = pw_slug(d.fmt_tenid))
+                 order by pw_compact(fmt_tenid), ended_at desc",
                 [...$bind, $compact.'%', $limit * 4]
             ),
         ];
