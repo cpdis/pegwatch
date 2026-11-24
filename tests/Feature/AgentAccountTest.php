@@ -80,7 +80,11 @@ class AgentAccountTest extends TestCase
             ->assertJsonPath('authorization_endpoint', route('passport.authorizations.authorize'))
             ->assertJsonPath('token_endpoint', route('passport.token'))
             ->assertJsonPath('registration_endpoint', route('mcp.oauth.register'))
-            ->assertJsonPath('code_challenge_methods_supported', ['S256']);
+            ->assertJsonPath('code_challenge_methods_supported', ['S256'])
+            ->assertJsonPath('jwks_uri', route('oauth.jwks'));
+        $this->getJson('/.well-known/oauth-protected-resource')->assertOk()->assertJsonPath('bearer_methods_supported', ['header']);
+        $jwk = $this->getJson('/oauth/jwks')->assertOk()->json('keys.0');
+        $this->assertSame(['RSA', 'RS256', 'AQAB'], [$jwk['kty'], $jwk['alg'], $jwk['e']]);
         $this->getJson('/api/v1/me/watches')->assertUnauthorized();
 
         // No keys in config or on disk: say so instead of failing in the guard.
