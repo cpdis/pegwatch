@@ -2,6 +2,8 @@
 
 use App\Http\Middleware\AgentResponses;
 use App\Http\Middleware\MarkdownPath;
+use App\Http\Middleware\RequireOAuthKeys;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,9 +20,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Agents: `.md` paths are pages as Markdown; every page gets discovery Link headers.
         $middleware->prepend(MarkdownPath::class);
         $middleware->appendToGroup('web', AgentResponses::class);
+        // Before the token guard, which can't start without Passport's keys.
+        $middleware->prependToPriorityList(AuthenticatesRequests::class, RequireOAuthKeys::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
+            fn (Request $request) => $request->is('api/*', 'mcp', 'mcp/*', 'oauth/token', 'oauth/register') || $request->expectsJson(),
         );
     })->create();

@@ -25,7 +25,7 @@ class PegwatchServer extends Server
 
     public const PROTOCOL_VERSION = ProtocolVersion::V2025_06_18->value;
 
-    public const INSTRUCTIONS = <<<'MD'
+    public const LOOKUP_INSTRUCTIONS = <<<'MD'
         Pegwatch tracks every live, pending and dead mining tenement in Western Australia, checked against the state register every night.
         Start with search_register for an ID, holder or town, or tenements_at_point for a location. Tenement IDs are type, mineral field and number ("E 24/250"); any spelling works.
         Register dates are Perth (AWST) dates. The register is never live: call get_data_status before saying anything is current.
@@ -34,6 +34,8 @@ class PegwatchServer extends Server
         request_watch and request_digest_subscription only email a confirm link to the address given; use an address the person gave you, and tell them to press the link.
         Every result has a `url` to the page a person would open. Data © State of Western Australia (DMPE), CC BY 4.0. Not legal advice.
         MD;
+
+    public const INSTRUCTIONS = self::LOOKUP_INSTRUCTIONS."\n".'To list or change the person\'s own watches, connect to /mcp/account on this host instead: the person signs you in with OAuth.';
 
     /** @var list<class-string<Tool>> */
     protected array $tools = [
@@ -58,7 +60,13 @@ class PegwatchServer extends Server
     /** The tools as tools/list describes them, for the server card. */
     public static function toolCards(): array
     {
+        return self::cardsFor(self::class);
+    }
+
+    /** @param class-string<Server> $server */
+    protected static function cardsFor(string $server): array
+    {
         return array_map(fn (string $class) => array_intersect_key(App::make($class)->toArray(), array_flip(['name', 'title', 'description', 'inputSchema', 'annotations'])),
-            (new \ReflectionClass(self::class))->getDefaultProperties()['tools']);
+            (new \ReflectionClass($server))->getDefaultProperties()['tools']);
     }
 }

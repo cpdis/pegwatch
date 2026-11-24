@@ -11,7 +11,6 @@ use App\Models\WatchArea;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 
 /**
  * The public JSON API (/api/v1), described by /api/openapi.json. Read
@@ -91,12 +90,8 @@ class RegisterApiController extends Controller
 
     public function watch(Request $request): JsonResponse
     {
-        $v = Parse::validate($request->all(), Parse::shapeRules() + [
+        $v = Parse::validate($request->all(), Parse::shapeRules() + Parse::watchOptionRules() + [
             'email' => ['required', 'string', 'email:rfc', 'max:254'],
-            'name' => ['nullable', 'string', 'max:80'],
-            'alerts' => ['nullable', 'array', 'list', 'min:1'],
-            'alerts.*' => [Rule::in(array_keys(WatchArea::FREE_ALERTS))],
-            'include_covered_deaths' => ['nullable', 'boolean'],
         ]);
         $shape = Lookup::shape($v);
         if (! $shape) {

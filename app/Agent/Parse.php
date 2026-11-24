@@ -2,6 +2,7 @@
 
 namespace App\Agent;
 
+use App\Models\WatchArea;
 use App\Support\Register;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -132,6 +133,17 @@ final class Parse
             'latitude' => ['nullable', 'numeric', 'required_with:longitude'],
             'longitude' => ['nullable', 'numeric', 'required_with:latitude'],
             'radius_km' => ['nullable', 'numeric', 'min:1', 'max:50'],
+        ];
+    }
+
+    /** A new watch's options, on top of shapeRules(). */
+    public static function watchOptionRules(): array
+    {
+        return [
+            'name' => ['nullable', 'string', 'max:80'],
+            'alerts' => ['nullable', 'array', 'list', 'min:1'],
+            'alerts.*' => [Rule::in(array_keys(WatchArea::FREE_ALERTS))],
+            'include_covered_deaths' => ['nullable', 'boolean'],
         ];
     }
 }

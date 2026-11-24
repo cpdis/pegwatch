@@ -11,6 +11,7 @@ Every page is available as Markdown: send `Accept: text/markdown`, or add `.md` 
 - [Agent guide]({!! $base !!}/agents.md): the tools, how to read IDs, statuses and dates, and how watches are approved
 - [MCP server]({!! $base !!}/mcp): Streamable HTTP, no key; [server card]({!! $base !!}/.well-known/mcp/server-card.json)
 - [JSON API]({!! $base !!}/api/v1/status): no key; [OpenAPI description]({!! $base !!}/api/openapi.json)
+- [Account MCP server]({!! $base !!}/mcp/account): the same tools plus the person's own watches, after they sign you in ([auth.md]({!! $base !!}/auth.md))
 - [Agent skill]({!! $base !!}/.well-known/agent-skills/pegwatch/SKILL.md)
 
 ## Pages

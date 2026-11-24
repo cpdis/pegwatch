@@ -39,6 +39,22 @@ final class OpenApi
         $sent = ['202' => ['description' => 'Confirm email sent. Nothing starts until its owner presses the link.', 'content' => ['application/json' => ['schema' => ['type' => 'object']]]],
             '429' => ['description' => 'Too many sign-ups from this client or for this address.']];
 
+        // The signed-in person's watches (OAuth). Operation ids match the account MCP tools.
+        $me = ['security' => [['oauth' => ['mcp:use']]]];
+        $unauthorised = ['401' => ['description' => 'No or expired access token. Start OAuth from the WWW-Authenticate header.']];
+        $watchId = ['name' => 'id', 'in' => 'path', 'required' => true, 'description' => 'From list_my_watches.', 'schema' => ['type' => 'integer']];
+        $noWatch = ['404' => ['description' => 'No watch with that id on this account.', 'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/Message']]]]];
+        $options = [
+            'name' => ['type' => 'string', 'maxLength' => 80],
+            'alerts' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => array_keys(WatchArea::FREE_ALERTS)]],
+            'include_covered_deaths' => ['type' => 'boolean', 'default' => false],
+        ];
+        $replace = ['replace_existing' => ['type' => 'boolean', 'default' => false, 'description' => 'Delete the person\'s current watch of this kind (the free plan has one area and one holder watch). Only after they agree.']];
+        $body = fn (array $props) => ['required' => false, 'content' => ['application/json' => ['schema' => ['type' => 'object', 'properties' => $props]]]];
+        $taken = ['422' => ['description' => 'Invalid input, or the free plan\'s watch of this kind is taken and replace_existing was not set.']];
+        $act = fn (string $id, string $summary) => ['post' => $me + ['operationId' => $id, 'summary' => $summary, 'parameters' => [$watchId],
+            'responses' => $ok('The watch.') + $noWatch + $unauthorised]];
+
         return [
             'openapi' => '3.1.0',
             'info' => [
@@ -110,8 +126,38 @@ final class OpenApi
                         'email' => ['type' => 'string', 'format' => 'email'],
                     ]]]]],
                     'responses' => $sent]],
+                '/me/watches' => [
+                    'get' => $me + ['operationId' => 'list_my_watches', 'summary' => 'The signed-in person\'s watches', 'responses' => $ok('Each watch with what is inside, its alerts and recent alert emails.') + $unauthorised],
+                    'post' => $me + ['operationId' => 'start_watch', 'summary' => 'Start a watch now (no confirm email)',
+                        'requestBody' => ['required' => true, 'content' => ['application/json' => ['schema' => ['type' => 'object', 'properties' => $shapeBody + $options + $replace]]]],
+                        'responses' => ['201' => ['description' => 'The watch, watching, and the name of any watch it replaced.']] + $taken + $notFound + $unauthorised],
+                ],
+                '/me/watches/{id}' => [
+                    'get' => $me + ['operationId' => 'get_my_watch', 'summary' => 'One of the person\'s watches', 'parameters' => [$watchId], 'responses' => $ok('The watch.') + $noWatch + $unauthorised],
+                    'patch' => $me + ['operationId' => 'update_watch', 'summary' => 'Rename a watch, change its alerts, or resize or move a circle', 'parameters' => [$watchId],
+                        'requestBody' => $body($options + ['radius_km' => ['type' => 'number', 'minimum' => 1, 'maximum' => 50], 'latitude' => ['type' => 'number'], 'longitude' => ['type' => 'number']]),
+                        'responses' => $ok('The watch.') + $taken + $noWatch + $unauthorised],
+                    'delete' => $me + ['operationId' => 'delete_watch', 'summary' => 'Delete a watch (cannot be undone)', 'parameters' => [$watchId],
+                        'responses' => ['204' => ['description' => 'Deleted.']] + $noWatch + $unauthorised],
+                ],
+                '/me/watches/{id}/stop' => $act('stop_watch', 'Stop a watch\'s alert emails (kept; resume turns them back on)'),
+                '/me/watches/{id}/resume' => $act('resume_watch', 'Turn a stopped watch\'s alerts back on'),
+                '/me/watches/{id}/confirm' => ['post' => $me + ['operationId' => 'confirm_watch', 'summary' => 'Confirm a watch waiting for its emailed link', 'parameters' => [$watchId],
+                    'requestBody' => $body($replace), 'responses' => $ok('The watch, and the name of any watch it replaced.') + $taken + $noWatch + $unauthorised]],
             ],
-            'components' => ['schemas' => ['Message' => ['type' => 'object', 'properties' => ['message' => ['type' => 'string']]]]],
+            'components' => [
+                'schemas' => ['Message' => ['type' => 'object', 'properties' => ['message' => ['type' => 'string']]]],
+                'securitySchemes' => ['oauth' => [
+                    'type' => 'oauth2',
+                    'description' => 'Authorization code with PKCE (S256). Register a client at the registration endpoint first (RFC 7591). The person approves the agent on Pegwatch and can disconnect it in Settings.',
+                    'flows' => ['authorizationCode' => [
+                        'authorizationUrl' => route('passport.authorizations.authorize'),
+                        'tokenUrl' => route('passport.token'),
+                        'refreshUrl' => route('passport.token'),
+                        'scopes' => ['mcp:use' => 'See and change the person\'s watches.'],
+                    ]],
+                ]],
+            ],
         ];
     }
 }

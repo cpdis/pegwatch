@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Agent\OpenApi;
 use App\Agent\Sitemap;
+use App\Mcp\Servers\PegwatchAccountServer;
 use App\Mcp\Servers\PegwatchServer;
 use App\Support\PageMeta;
 use App\Support\Register;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
+use Laravel\Mcp\Server\Registrar;
 
 /**
  * The files that tell crawlers and agents what Pegwatch is and how to use
@@ -24,7 +26,7 @@ class DiscoveryController extends Controller
     public const PRIVATE_PATHS = [
         '/watch-areas', '/watch/confirm/', '/dashboard', '/settings', '/login', '/register', '/forgot-password',
         '/reset-password', '/two-factor-challenge', '/user/', '/email/', '/confirm-password',
-        '/digest/confirm/', '/digest/unsubscribe/', '/hooks/', '/livewire', '/tiles/', '/og/areas/',
+        '/digest/confirm/', '/digest/unsubscribe/', '/hooks/', '/oauth/', '/livewire', '/tiles/', '/og/areas/',
     ];
 
     /** AI search and user-triggered fetchers: they put pages in answers, so they follow `search` and `ai_input`. */
@@ -107,7 +109,12 @@ class DiscoveryController extends Controller
     /** MCP Server Card (SEP-1649): how to reach the server and what it offers, before connecting. */
     public function mcpServerCard(): JsonResponse
     {
-        return $this->json([
+        return $this->json($this->publicServerCard());
+    }
+
+    private function publicServerCard(): array
+    {
+        return [
             '$schema' => 'https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json',
             'version' => '1.0',
             'protocolVersion' => PegwatchServer::PROTOCOL_VERSION,
@@ -121,7 +128,26 @@ class DiscoveryController extends Controller
             'authentication' => ['required' => false],
             'instructions' => PegwatchServer::INSTRUCTIONS,
             'tools' => PegwatchServer::toolCards(),
-        ]);
+        ];
+    }
+
+    /** The account server: the public card's tools plus the signed-in person's watches, behind OAuth. */
+    private function accountServerCard(): array
+    {
+        return [
+            ...$this->publicServerCard(),
+            'serverInfo' => ['name' => 'pegwatch-account', 'title' => PageMeta::SITE_NAME.' (your account)', 'version' => PegwatchServer::VERSION],
+            'description' => 'Everything the public Pegwatch server does, plus the signed-in person\'s watches: list, start, change, stop, confirm and delete them.',
+            'transport' => ['type' => 'streamable-http', 'endpoint' => url('/mcp/account')],
+            'authentication' => [
+                'required' => true, 'schemes' => ['oauth2'],
+                'protectedResourceMetadata' => route('mcp.oauth.protected-resource.nested', ['path' => 'mcp/account']),
+                'authorizationServerMetadata' => route('mcp.oauth.authorization-server'),
+                'scopes' => [Registrar::OAUTH_SCOPE],
+            ],
+            'instructions' => PegwatchAccountServer::INSTRUCTIONS,
+            'tools' => PegwatchAccountServer::toolCards(),
+        ];
     }
 
     /** Agent Skills discovery (v0.2.0): one skill, how to use Pegwatch. */
@@ -161,6 +187,13 @@ class DiscoveryController extends Controller
                     'type' => 'application/mcp-server-card+json',
                     'url' => route('wellknown.mcp-card'),
                     'representativeQueries' => self::QUERIES,
+                ],
+                [
+                    'identifier' => "urn:air:$host:server:pegwatch-account",
+                    'displayName' => PageMeta::SITE_NAME.' MCP server for your account',
+                    'type' => 'application/mcp-server-card+json',
+                    'data' => $this->accountServerCard(),
+                    'representativeQueries' => ['Watch the ground around Kalgoorlie for me', 'Stop my Pegwatch alerts for M 27/518', 'What am I watching on Pegwatch?'],
                 ],
                 [
                     'identifier' => "urn:air:$host:skill:pegwatch",

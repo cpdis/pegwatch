@@ -7,6 +7,7 @@ Everything a person can look up on the site, an agent can look up too, through t
 - **MCP server** (Streamable HTTP, no key): `{!! $base !!}/mcp`. Card: `{!! $base !!}/.well-known/mcp/server-card.json`.
 - **JSON API** (no key): `{!! $base !!}/api/v1`. OpenAPI 3.1: `{!! $base !!}/api/openapi.json`.
 - **Markdown pages**: any page as Markdown with `Accept: text/markdown`, or by adding `.md` to its path (`{!! $base !!}/tenements/m-27-518.md`; the map's home is `{!! $base !!}/index.md`).
+- **A person's own watches** (OAuth): `{!! $base !!}/mcp/account`, the same tools plus watch management. See [Acting for a signed-in person](#acting-for-a-signed-in-person).
 - **In the browser (WebMCP)**: pages register tools on `document.modelContext` to search, open pages and drive the map.
 
 ## Tools
@@ -44,7 +45,20 @@ Lists take arrays or comma-separated strings. A box (`bbox`) is `west,south,east
 
 Looking things up never needs approval. Asking for alerts does: `request_watch` and `request_digest_subscription` only email a confirm link to the address given, and nothing is sent after that unless its owner presses it. Only use an address the person gave you for this. The free plan has one area (a circle up to 50 km, or a tenement and 2 km around it) and one holder watch; confirming a new one replaces the old. Alerts are deaths and scheduled releases.
 
-Managing a person's existing watches (listing, renaming, stopping) needs them signed in: their alert emails carry one-click stop links, and the site's [My watches]({!! $base !!}/watch-areas) page does the rest.
+## Acting for a signed-in person
+
+To see and change a person's own watches, connect to `{!! $base !!}/mcp/account` instead of `/mcp`. Without a token it answers 401 with a `WWW-Authenticate` header pointing at `{!! $base !!}/.well-known/oauth-protected-resource/mcp/account`, so MCP clients start OAuth on their own: dynamic client registration (`POST {!! $base !!}/oauth/register`), then the authorization code flow with PKCE (S256) and scope `mcp:use`. The person signs in to Pegwatch by emailed link or passkey, sees which app is asking and where it sends them back, and presses Allow. They can disconnect it any time under Settings, Connected agents. Access tokens last 8 hours; refresh tokens 60 days.
+
+| MCP tool | API | What it does |
+|---|---|---|
+| `list_my_watches` | `GET /api/v1/me/watches` | Their watches: what each covers and holds, its alerts, whether it is on, and the last alert emails. |
+| `start_watch` | `POST /api/v1/me/watches` | Start a watch now, with no confirm email: signing the agent in was the approval. |
+| `update_watch` | `PATCH /api/v1/me/watches/{id}` | Rename, choose alerts, include covered deaths, resize or move a circle. |
+| `stop_watch` / `resume_watch` | `POST /api/v1/me/watches/{id}/stop`, `/resume` | Stop alert emails and turn them back on. |
+| `confirm_watch` | `POST /api/v1/me/watches/{id}/confirm` | Confirm a watch waiting for its emailed link. |
+| `delete_watch` | `DELETE /api/v1/me/watches/{id}` | Delete a watch and its alert history. Cannot be undone. |
+
+The free plan has one area watch and one holder watch. Starting or confirming a second of a kind fails and names the watch it would replace; pass `replace_existing: true` only after the person agrees. Ask before `delete_watch` too: `stop_watch` keeps the watch. Alert emails only ever go to the person's own address.
 
 ## Good first calls
 
