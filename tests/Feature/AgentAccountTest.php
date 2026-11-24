@@ -45,6 +45,12 @@ class AgentAccountTest extends TestCase
         );
     }
 
+    protected function tearDown(): void
+    {
+        Passport::$keyPath = null;
+        parent::tearDown();
+    }
+
     private function user(string $email = 'pat@example.com'): User
     {
         return User::factory()->create(['email' => $email]);
@@ -77,7 +83,9 @@ class AgentAccountTest extends TestCase
             ->assertJsonPath('code_challenge_methods_supported', ['S256']);
         $this->getJson('/api/v1/me/watches')->assertUnauthorized();
 
+        // No keys in config or on disk: say so instead of failing in the guard.
         config(['passport.public_key' => null]);
+        Passport::loadKeysFrom(sys_get_temp_dir().'/pegwatch-no-oauth-keys');
         $this->getJson('/api/v1/me/watches')->assertServiceUnavailable()->assertJsonPath('message', fn ($m) => str_contains($m, 'not set up'));
     }
 
