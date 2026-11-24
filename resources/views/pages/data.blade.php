@@ -121,6 +121,10 @@ new #[Title('Data and disclaimer')] class extends Component {
             {{ __('Applications reach the open data a day or more after they are lodged, and the department does not publish an extract every day. What Pegwatch shows is as of the extract time above, never live.') }}
         </li>
         <li>
+            <strong class="font-semibold text-zinc-900 dark:text-white">{{ __('Land that needs consent.') }}</strong>
+            {{ __('Townsites, Commonwealth land, national parks and class A reserves, state forest and timber reserves, and Aboriginal reserves can need the Minister\'s or another agency\'s consent before anyone marks out or mines. Their maps are not in the department\'s open data, and the versions other agencies publish do not allow reuse in a paid product.') }}
+        </li>
+        <li>
             <strong class="font-semibold text-zinc-900 dark:text-white">{{ __('Private land.') }}</strong>
             {{ __('Land tenure, private land that needs the owner\'s consent, and old grants where the owner holds the minerals are not in the open data.') }}
         </li>
