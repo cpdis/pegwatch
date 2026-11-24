@@ -85,6 +85,9 @@ class AgentAccountTest extends TestCase
         $this->getJson('/.well-known/oauth-protected-resource')->assertOk()->assertJsonPath('bearer_methods_supported', ['header']);
         $jwk = $this->getJson('/oauth/jwks')->assertOk()->json('keys.0');
         $this->assertSame(['RSA', 'RS256', 'AQAB'], [$jwk['kty'], $jwk['alg'], $jwk['e']]);
+        config(['passport.public_key' => "-----BEGIN PUBLIC KEY-----\nnot a key\n-----END PUBLIC KEY-----"]);
+        $this->getJson('/oauth/jwks')->assertOk()->assertExactJson(['keys' => []]);
+        config(['passport.public_key' => self::$keys[1]]);
         $this->getJson('/api/v1/me/watches')->assertUnauthorized();
 
         // No keys in config or on disk: say so instead of failing in the guard.

@@ -49,7 +49,9 @@ class OAuthMetadataController extends Controller
     public function jwks(): JsonResponse
     {
         $pem = config('passport.public_key') ?: (is_file($file = Passport::keyPath('oauth-public.key')) ? file_get_contents($file) : null);
-        $details = $pem ? openssl_pkey_get_details(openssl_pkey_get_public(str_replace('\\n', "\n", $pem)) ?: null) : null;
+        // A missing or malformed key (a bad paste into the env var) means an empty set, not a 500.
+        $key = $pem ? openssl_pkey_get_public(str_replace('\\n', "\n", $pem)) : false;
+        $details = $key ? openssl_pkey_get_details($key) : false;
         if (! is_array($details) || ! isset($details['rsa'])) {
             return $this->json(['keys' => []]);
         }
