@@ -33,6 +33,15 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="pegwatch-map" content="{{ json_encode(\App\Support\Format::mapConfig()) }}" />
 
+{{-- For agents: this page as Markdown, and where the API, MCP server and guide are (the Link headers say the same). --}}
+<link rel="alternate" type="text/markdown" href="{{ request()->path() === '/' ? url('/index.md') : request()->url().'.md' }}" />
+<link rel="ai-catalog" href="{{ route('wellknown.ai-catalog') }}" />
+<link rel="api-catalog" href="{{ route('wellknown.api-catalog') }}" />
+<link rel="service-doc" href="{{ route('agents') }}" />
+@if ($jsonLd = \App\Agent\StructuredData::for(request(), $meta))
+    <script type="application/ld+json">{!! json_encode($jsonLd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) !!}</script>
+@endif
+
 {{-- Pages add head tags here with @push('head'), e.g. robots for natural-person holder pages. --}}
 @stack('head')
 

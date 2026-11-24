@@ -1,13 +1,10 @@
 <?php
 
 use App\Alerts\WatchShape;
-use App\Auth\MagicLink;
-use App\Mail\WatchConfirmMail;
+use App\Alerts\WatchRequest;
 use App\Models\User;
 use App\Models\WatchArea;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
@@ -149,29 +146,17 @@ new class extends Component {
 
             return;
         }
-        if (! MagicLink::allowSend('watch-signup', $email)) {
+        if (! WatchRequest::emailConfirm($email, $this->shape, $this->name, $this->alerts, $this->include_covered_deaths)) {
             $this->addError('email', __('Too many sign-ups from here. Try again later.'));
 
             return;
         }
-        $area = $this->create($user ?? User::firstOrCreate(['email' => $email]));
-        Mail::to($email)->send(new WatchConfirmMail($area));
         $this->sentTo = $email;
     }
 
-    /** A new, unconfirmed watch, replacing any earlier unconfirmed one of its kind: the newest ask wins. */
     private function create(User $user): WatchArea
     {
-        return DB::transaction(function () use ($user) {
-            $user->watchAreas()->inGroup($this->shape->isArea() ? 'area' : 'holder')->whereNull('confirmed_at')->delete();
-
-            return $user->watchAreas()->create([
-                ...$this->shape->attributes(),
-                'name' => $this->name,
-                'event_types' => WatchArea::eventTypesFor($this->alerts),
-                'include_covered_deaths' => $this->include_covered_deaths,
-            ]);
-        });
+        return WatchRequest::create($user, $this->shape, $this->name, $this->alerts, $this->include_covered_deaths);
     }
 }; ?>
 

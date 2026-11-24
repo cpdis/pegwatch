@@ -1,9 +1,6 @@
 <?php
 
-use App\Mail\DigestConfirmMail;
-use App\Models\DigestSubscriber;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\RateLimiter;
+use App\Digest\DigestSignup;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -44,23 +41,10 @@ new class extends Component {
 
             return;
         }
-        $ipKey = 'digest-signup:ip:'.request()->ip();
-        $emailKey = 'digest-signup:email:'.sha1($email);
-        if (RateLimiter::tooManyAttempts($ipKey, 5) || RateLimiter::tooManyAttempts($emailKey, 3)) {
+        if (! DigestSignup::request($email, $this->source)) {
             $this->addError('email', __('Too many sign-ups from here. Try again later.'));
 
             return;
-        }
-        RateLimiter::hit($ipKey, 600);
-        RateLimiter::hit($emailKey, 86400);
-
-        $subscriber = DigestSubscriber::firstOrCreate(['email' => $email], ['source' => $this->source]);
-        if (! $subscriber->isActive()) {
-            if ($subscriber->unsubscribed_at !== null) {
-                // Coming back after unsubscribing: confirm again before sending anything.
-                $subscriber->forceFill(['confirmed_at' => null, 'unsubscribed_at' => null, 'source' => $this->source])->save();
-            }
-            Mail::to($email)->send(new DigestConfirmMail($subscriber));
         }
 
         $this->reset('email');

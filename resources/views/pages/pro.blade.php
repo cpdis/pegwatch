@@ -104,7 +104,8 @@ new #[Title('Plans')] class extends Component {
         [__('Holder watches'), __('1 holder'), __('Unlimited'), __('Unlimited')],
         [__('Alerts'), __('Tenement dead and release scheduled, with a calendar file and reminders'), __('Every type: applications, shrinkage, grants, transfers, expiry'), __('Every type')],
         [__('GPX and KML exports for GPS and detector apps'), false, true, true],
-        [__('CSV, GeoJSON and an API'), false, false, true],
+        [__('Lookups for AI agents and scripts (MCP server and API)'), true, true, true],
+        [__('Bulk CSV and GeoJSON exports, and an API to manage the team\'s watches'), false, false, true],
         [__('Weekly WA digest'), true, true, true],
     ];
     $toEmail = "\$nextTick(() => { const el = document.getElementById('presale-email'); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus({ preventScroll: true }) })";
@@ -187,7 +188,7 @@ new #[Title('Plans')] class extends Component {
         <flux:card @class(['ring-2 ring-zinc-800 dark:ring-white' => $plan === 'team'])>
             <flux:heading size="lg">{{ __('Team') }}</flux:heading>
             <flux:text class="mt-1"><span class="text-2xl font-semibold text-zinc-900 dark:text-white">A$49</span> {{ __('a month per team, not per user') }}</flux:text>
-            <flux:text class="mt-2 text-sm">{{ __('For consultants and junior explorers: shared watch lists for the whole team, plus CSV, GeoJSON and an API.') }}</flux:text>
+            <flux:text class="mt-2 text-sm">{{ __('For consultants and junior explorers: shared watch lists for the whole team, plus bulk CSV and GeoJSON exports and an API to manage the team\'s watches.') }}</flux:text>
             <flux:button class="mt-4 w-full" :variant="$plan === 'team' ? 'primary' : 'outline'" wire:click="choose('team')" x-on:click="{{ $toEmail }}">{{ __('Register interest') }}</flux:button>
         </flux:card>
     </div>
