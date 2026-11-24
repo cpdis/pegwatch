@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ActivityRssController;
 use App\Http\Controllers\DigestUnsubscribeController;
+use App\Http\Controllers\DiscoveryController as Discovery;
 use App\Http\Controllers\IngestHookController;
 use App\Http\Controllers\LoginLinkController;
 use App\Http\Controllers\OgImageController;
@@ -77,6 +78,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::redirect('dashboard', '/watch-areas')->name('dashboard');
     Route::livewire('watch-areas', 'pages::watch-areas')->name('watch-areas.index');
+});
+
+// Agents: the guide page, and the cookie-free discovery files (robots.txt,
+// sitemaps, llms.txt, /.well-known). The API is routes/api.php; the MCP
+// server is routes/ai.php.
+Route::livewire('agents', 'pages::agents')->name('agents');
+Route::withoutMiddleware('web')->group(function () {
+    Route::get('robots.txt', [Discovery::class, 'robots'])->name('robots');
+    Route::get('sitemap.xml', [Discovery::class, 'sitemapIndex'])->name('sitemap');
+    Route::get('sitemaps/{part}.xml', [Discovery::class, 'sitemap'])->where('part', '[a-z]+(-[0-9]+)?')->name('sitemap.part');
+    Route::get('llms.txt', [Discovery::class, 'llms'])->name('llms');
+    Route::get('llms-full.txt', [Discovery::class, 'llmsFull'])->name('llms-full');
+    Route::get('auth.md', [Discovery::class, 'authMd'])->name('auth-md');
+    Route::get('.well-known/api-catalog', [Discovery::class, 'apiCatalog'])->name('wellknown.api-catalog');
+    Route::get('.well-known/mcp/server-card.json', [Discovery::class, 'mcpServerCard'])->name('wellknown.mcp-card');
+    Route::get('.well-known/agent-skills/index.json', [Discovery::class, 'skillsIndex'])->name('wellknown.skills');
+    Route::get('.well-known/agent-skills/{name}/SKILL.md', [Discovery::class, 'skill'])->where('name', '[a-z0-9-]+')->name('wellknown.skill');
+    Route::get('.well-known/ai-catalog.json', [Discovery::class, 'aiCatalog'])->name('wellknown.ai-catalog');
 });
 
 require __DIR__.'/settings.php';

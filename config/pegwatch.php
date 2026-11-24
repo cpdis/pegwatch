@@ -17,4 +17,13 @@ return [
         'url' => env('PEGWATCH_SATELLITE_URL'),
         'attribution' => env('PEGWATCH_SATELLITE_ATTRIBUTION'),
     ],
+
+    // How AI crawlers and agents may use the site's pages (robots.txt).
+    // Content Signals (contentsignals.org): search, ai-input (use in answers),
+    // ai-train. With ai_train off, training-only crawlers are also disallowed.
+    'agents' => [
+        'search' => (bool) env('PEGWATCH_AI_SEARCH', true),
+        'ai_input' => (bool) env('PEGWATCH_AI_INPUT', true),
+        'ai_train' => (bool) env('PEGWATCH_AI_TRAIN', false),
+    ],
 ];
