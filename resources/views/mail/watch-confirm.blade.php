@@ -1,4 +1,6 @@
 <x-mail::message>
+<x-mail::eyebrow>New watch</x-mail::eyebrow>
+
 # Confirm your watch
 
 Press the button to start watching **{{ $area->name }}**: {{ $describe }}.
@@ -9,5 +11,7 @@ We email you after a night when the WA register changes there: tenements recorde
 Start watching {{ $area->name }}
 </x-mail::button>
 
+<x-mail::subcopy>
 The link works for {{ $days }} days. If you didn't ask for this, ignore this email and nothing more will be sent.
+</x-mail::subcopy>
 </x-mail::message>
