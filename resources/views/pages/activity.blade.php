@@ -143,7 +143,10 @@ new #[Title('Activity')] class extends Component {
     <section class="mt-5 space-y-3" aria-label="{{ __('Filters') }}">
         <flux:checkbox.group wire:model.live="types" variant="pills" :label="__('Change')" class="flex flex-wrap gap-2">
             @foreach ($this::CHIPS as $key => $label)
-                <flux:checkbox :value="$key" :label="__($label)" class="max-sm:min-h-11 max-sm:px-3" />
+                {{-- The chips are the key to the dots on the list and the map. --}}
+                <flux:checkbox :value="$key" class="max-sm:min-h-11 max-sm:px-3">
+                    <span class="size-2 shrink-0 rounded-full ring-1 ring-white" style="background: {{ Format::eventColour($key) }}" aria-hidden="true"></span>{{ __($label) }}
+                </flux:checkbox>
             @endforeach
         </flux:checkbox.group>
         <flux:checkbox.group wire:model.live="kinds" variant="pills" :label="__('Tenement type')" class="flex flex-wrap gap-2">

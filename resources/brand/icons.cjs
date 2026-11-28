@@ -53,6 +53,14 @@ const outputs = [
     await card.screenshot({ path: 'public/og.png' });
     console.log('public/og.png');
 
+    // The avatar for hosting dashboards (Laravel Cloud): the mark reversed on hi-vis yellow,
+    // which a near-black tile would vanish into. Uploaded by hand, not served.
+    const avatar = await browser.newPage({ viewport: { width: 512, height: 512 } });
+    const reversed = svg.replace('fill="#0b0b0c"', 'fill="#ffd400"').replace('rx="7"', 'rx="0"').replace('fill="#fff"', 'fill="#0b0b0c"').replace(/fill="#ffd400" d=/, 'fill="#fff" d=');
+    await avatar.setContent(`<html><body style="margin:0">${reversed.replace('<svg ', '<svg width="512" height="512" style="display:block" ')}</body></html>`);
+    await avatar.screenshot({ path: 'resources/brand/avatar.png' });
+    console.log('resources/brand/avatar.png');
+
     await browser.close();
     execFileSync('convert', ['ico-16.png', 'ico-32.png', 'ico-48.png'].map((f) => path.join(tmp, f)).concat('public/favicon.ico'));
     fs.rmSync(tmp, { recursive: true });
