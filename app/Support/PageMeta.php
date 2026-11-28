@@ -36,7 +36,7 @@ final class PageMeta
             self::DEFAULT_DESCRIPTION,
             $request->url(),
             asset('og.png'),
-            'The Pegwatch mark, a survey peg with hi-vis tape',
+            'The Pegwatch mark, a letter P whose stem is a survey peg',
         );
         $slug = $route?->parameter('slug');
 

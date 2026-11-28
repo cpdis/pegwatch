@@ -475,3 +475,117 @@
 .dark .pw-card__list {
     border-color: var(--color-zinc-700);
 }
+
+/* The map's own chrome. Prefixed: MapLibre's stylesheet loads after this one. */
+
+.dark .maplibregl-map .maplibregl-ctrl-group,
+.dark .maplibregl-map .maplibregl-ctrl-attrib,
+.dark .pw-coords,
+.dark .pw-locator,
+.dark .pw-blocks__button {
+    background: rgb(24 24 27 / 0.94);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14);
+    color: var(--color-zinc-100);
+}
+
+.dark .maplibregl-map .maplibregl-ctrl-group button + button {
+    border-top-color: rgb(255 255 255 / 0.14);
+}
+
+.dark .maplibregl-map .maplibregl-ctrl-group button:not(:disabled):hover {
+    background-color: rgb(255 255 255 / 0.08);
+}
+
+.dark .maplibregl-map .maplibregl-ctrl button .maplibregl-ctrl-icon,
+.dark .maplibregl-map .maplibregl-ctrl-attrib-button {
+    filter: invert(1) hue-rotate(180deg);
+}
+
+.dark .maplibregl-map .maplibregl-ctrl-attrib a {
+    color: var(--color-zinc-300);
+}
+
+.dark .maplibregl-map .maplibregl-ctrl-scale {
+    border-color: var(--color-zinc-300);
+    background: rgb(24 24 27 / 0.75);
+    color: var(--color-zinc-200);
+}
+
+.dark .pw-coords span {
+    color: var(--color-zinc-400);
+}
+
+/* Shown from the first paint until the first tiles are drawn. */
+
+.pw-map-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: grid;
+    place-items: center;
+    background: #f2f3f0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-out;
+}
+
+.dark .pw-map-loading {
+    background: #0e0e0e;
+}
+
+.pw-map-loading--done {
+    opacity: 0;
+}
+
+.pw-map-loading span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.92);
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08);
+    color: var(--color-zinc-700);
+    font: 500 12px/1.2 var(--font-sans);
+}
+
+.dark .pw-map-loading span {
+    background: rgb(24 24 27 / 0.94);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14);
+    color: var(--color-zinc-200);
+}
+
+.pw-map-loading i {
+    width: 12px;
+    height: 12px;
+    border: 2px solid currentColor;
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: pw-spin 0.8s linear infinite;
+}
+
+@keyframes pw-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pw-map-loading i {
+        animation: none;
+    }
+
+    .pw-map-loading {
+        transition: none;
+    }
+}
+
+.dark .pw-blocks__button[aria-pressed='true'],
+.dark .pw-satellite-toggle[aria-pressed='true'] {
+    background: var(--color-accent);
+    color: var(--color-ink);
+}
+
+.dark .pw-locator path {
+    fill: var(--color-zinc-700);
+    stroke: var(--color-zinc-400);
+}

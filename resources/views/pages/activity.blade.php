@@ -128,7 +128,7 @@ new #[Title('Activity')] class extends Component {
             @foreach ($stats as $type => $label)
                 <div class="rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700">
                     <dt class="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                        <span class="size-2 rounded-full" style="background: {{ Format::eventColour($type) }}"></span>{{ $label }}
+                        <span class="size-2 rounded-full dark:ring-1 dark:ring-white/60" style="background: {{ Format::eventColour($type) }}"></span>{{ $label }}
                     </dt>
                     <dd class="text-2xl font-semibold tabular-nums">{{ number_format($totals[$type] ?? 0) }}</dd>
                 </div>
@@ -143,7 +143,10 @@ new #[Title('Activity')] class extends Component {
     <section class="mt-5 space-y-3" aria-label="{{ __('Filters') }}">
         <flux:checkbox.group wire:model.live="types" variant="pills" :label="__('Change')" class="flex flex-wrap gap-2">
             @foreach ($this::CHIPS as $key => $label)
-                <flux:checkbox :value="$key" :label="__($label)" class="max-sm:min-h-11 max-sm:px-3" />
+                {{-- The chips are the key to the dots on the list and the map. --}}
+                <flux:checkbox :value="$key" class="max-sm:min-h-11 max-sm:px-3">
+                    <span class="size-2 shrink-0 rounded-full ring-1 ring-white" style="background: {{ Format::eventColour($key) }}" aria-hidden="true"></span>{{ __($label) }}
+                </flux:checkbox>
             @endforeach
         </flux:checkbox.group>
         <flux:checkbox.group wire:model.live="kinds" variant="pills" :label="__('Tenement type')" class="flex flex-wrap gap-2">

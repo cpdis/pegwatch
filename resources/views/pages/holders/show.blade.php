@@ -330,7 +330,7 @@ new class extends Component {
                                     <x-status-badge :status="$t['status'] ?? 'dead'" :label="$t['status'] ? null : __('Unknown')" />
                                     <span class="ms-auto text-zinc-500 dark:text-zinc-400">{{ $t['area_ha'] !== null ? number_format($t['area_ha'], $t['area_ha'] < 10 ? 1 : 0).' ha' : '' }}</span>
                                 </div>
-                                <div class="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                                <div class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                                     {{ $t['type_label'] }}@if ($t['field']) · {{ $t['field'] }}@endif
                                     @php([$expiry, $warn] = $this->expiry($t, short: true))
                                     · <span @class(['text-amber-700 dark:text-amber-400' => $warn])>{{ $expiry }}</span>
