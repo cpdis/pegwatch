@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\AccountApiController as Me;
 use App\Http\Controllers\Api\RegisterApiController as Api;
 use App\Http\Controllers\DiscoveryController;
+use App\Http\Middleware\RequireOAuthKeys;
 use Illuminate\Support\Facades\Route;
 
 // The public JSON API, described by /api/openapi.json. No key; rate limited
@@ -24,4 +26,17 @@ Route::prefix('v1')->middleware('throttle:agents')->name('api.')->group(function
     // These two send one confirm email each; the owner's press of its link is the approval.
     Route::post('watches', [Api::class, 'watch'])->middleware('throttle:agent-signups')->name('watches.request');
     Route::post('digest/subscriptions', [Api::class, 'digestSubscribe'])->middleware('throttle:agent-signups')->name('digest.subscribe');
+});
+
+// The signed-in person's watches, with an OAuth access token (Bearer) from
+// Pegwatch: see /.well-known/oauth-authorization-server.
+Route::prefix('v1/me')->middleware(['throttle:agents', RequireOAuthKeys::class, 'auth:api'])->name('api.me.')->group(function () {
+    Route::get('watches', [Me::class, 'index'])->name('watches');
+    Route::post('watches', [Me::class, 'store'])->name('watches.store');
+    Route::get('watches/{id}', [Me::class, 'show'])->whereNumber('id')->name('watches.show');
+    Route::patch('watches/{id}', [Me::class, 'update'])->whereNumber('id')->name('watches.update');
+    Route::post('watches/{id}/stop', [Me::class, 'stop'])->whereNumber('id')->name('watches.stop');
+    Route::post('watches/{id}/resume', [Me::class, 'resume'])->whereNumber('id')->name('watches.resume');
+    Route::post('watches/{id}/confirm', [Me::class, 'confirm'])->whereNumber('id')->name('watches.confirm');
+    Route::delete('watches/{id}', [Me::class, 'destroy'])->whereNumber('id')->name('watches.destroy');
 });

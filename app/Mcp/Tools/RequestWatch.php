@@ -8,7 +8,6 @@ use App\Alerts\WatchRequest;
 use App\Models\WatchArea;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -23,12 +22,8 @@ class RequestWatch extends AgentTool
 {
     public function handle(Request $request): Response|ResponseFactory
     {
-        $v = $this->input($request, Parse::shapeRules() + [
+        $v = $this->input($request, Parse::shapeRules() + Parse::watchOptionRules() + [
             'email' => ['required', 'string', 'email:rfc', 'max:254'],
-            'name' => ['nullable', 'string', 'max:80'],
-            'alerts' => ['nullable', 'array', 'list', 'min:1'],
-            'alerts.*' => [Rule::in(array_keys(WatchArea::FREE_ALERTS))],
-            'include_covered_deaths' => ['nullable', 'boolean'],
         ]);
         $shape = Lookup::shape($v);
         if (! $shape) {

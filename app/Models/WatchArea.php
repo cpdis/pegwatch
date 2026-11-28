@@ -141,6 +141,18 @@ class WatchArea extends Model
         });
     }
 
+    /** Stop alerts, dropping any not sent yet. The watch stays and can be turned back on. */
+    public function stop(): void
+    {
+        $this->forceFill(['unsubscribed_at' => $this->unsubscribed_at ?? now()])->save();
+        DB::table('alert_deliveries')->where('watch_area_id', $this->id)->whereNull('sent_at')->delete();
+    }
+
+    public function resume(): void
+    {
+        $this->forceFill(['unsubscribed_at' => null])->save();
+    }
+
     /** Free alert keys (see FREE_ALERTS) this watch has on. */
     public function alerts(): array
     {

@@ -115,10 +115,7 @@ new #[Title('My watches')] class extends Component {
     public function setStopped(int $id, bool $stopped): void
     {
         $area = $this->mine($id);
-        $area->forceFill(['unsubscribed_at' => $stopped ? now() : null])->save();
-        if ($stopped) {
-            DB::table('alert_deliveries')->where('watch_area_id', $id)->whereNull('sent_at')->delete();
-        }
+        $stopped ? $area->stop() : $area->resume();
         unset($this->watches);
     }
 
