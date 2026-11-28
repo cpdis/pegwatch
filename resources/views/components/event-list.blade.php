@@ -59,7 +59,7 @@
                     @if ($e['bulk'] ?? false)
                         <li wire:key="{{ $e['key'] }}" class="py-2.5">
                             <div class="flex items-baseline gap-2 text-sm">
-                                <span class="inline-block size-2 shrink-0 translate-y-[-1px] rounded-full" style="background: {{ Format::eventColour('application') }}"></span>
+                                <span class="inline-block size-2 shrink-0 translate-y-[-1px] rounded-full dark:ring-1 dark:ring-white/60" style="background: {{ Format::eventColour('application') }}"></span>
                                 <span><a href="{{ route('holders.show', $e['holder']['slug']) }}" class="font-medium hover:underline" wire:navigate>{{ $e['holder']['name'] }}</a>{{ \Illuminate\Support\Str::after($e['sentence'], $e['holder']['name']) }}</span>
                             </div>
                             <details class="group ps-4 text-xs text-zinc-500 dark:text-zinc-400">
@@ -84,7 +84,7 @@
                         x-on:mouseenter="$dispatch('event-hover', { id: @js($e['key']) }); $dispatch('map-select', { tenid: @js($e['tenid'] ?? null) })"
                         x-on:mouseleave="$dispatch('event-hover', { id: null }); $dispatch('map-select', { tenid: null })">
                         <div class="flex items-baseline gap-2 text-sm">
-                            <span class="inline-block size-2 shrink-0 translate-y-[-1px] rounded-full" style="background: {{ Format::eventColour($e['type']) }}"></span>
+                            <span class="inline-block size-2 shrink-0 translate-y-[-1px] rounded-full dark:ring-1 dark:ring-white/60" style="background: {{ Format::eventColour($e['type']) }}"></span>
                             <span class="font-medium">{{ $e['label'] }}</span>
                             @if ($e['slug'] ?? null)
                                 <flux:link :href="route('tenements.show', $e['slug'])" wire:navigate class="tabular-nums">{{ $e['fmt_tenid'] }}</flux:link>

@@ -48,6 +48,17 @@ export default function tenementMap(config = {}) {
         selection: null,
 
         async init() {
+            // Something to look at while MapLibre, the basemap and the first tiles arrive.
+            const veil = Object.assign(document.createElement('div'), { className: 'pw-map-loading', role: 'status' });
+            veil.innerHTML = '<span><i aria-hidden="true"></i>Loading the map</span>';
+            if (getComputedStyle(this.$el).position === 'static') this.$el.style.position = 'relative';
+            this.$el.append(veil);
+            const unveil = () => {
+                veil.classList.add('pw-map-loading--done');
+                setTimeout(() => veil.remove(), 200);
+            };
+            cleanups.push(() => veil.remove());
+
             // MapLibre is about 1 MB, so only pages with a map load it.
             const [{ default: maplibregl }] = await Promise.all([import('maplibre-gl'), import('maplibre-gl/dist/maplibre-gl.css')]);
             if (!this.$refs.map?.isConnected) return;
@@ -85,6 +96,9 @@ export default function tenementMap(config = {}) {
                 ready = true;
                 this.sync();
                 this.moved();
+                // The veil lifts when the first tiles are drawn, or after 8 s on a slow line.
+                map.once('idle', unveil);
+                setTimeout(unveil, 8000);
             });
 
             this.$watch('layers', () => this.sync(), { deep: true });
