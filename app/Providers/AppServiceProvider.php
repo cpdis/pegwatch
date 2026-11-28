@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\ClientIp;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -9,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Passport\Passport;
@@ -36,12 +38,11 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * The API and MCP server are open to any client, so each client gets a
-     * budget. Behind Laravel Cloud's Cloudflare the client address is in
-     * CF-Connecting-IP (as in the search box).
+     * budget, keyed by the visitor's address (see ClientIp).
      */
     protected function configureAgentLimits(): void
     {
-        $client = fn (Request $r): string => (string) ($r->header('CF-Connecting-IP') ?: $r->ip());
+        $client = fn (Request $r): string => ClientIp::of($r);
 
         RateLimiter::for('agents', fn (Request $r) => Limit::perMinute(120)->by('agents:'.$client($r)));
         // Each of these sends an email, so far fewer (the per-address limits still apply on top).
@@ -69,6 +70,13 @@ class AppServiceProvider extends ServiceProvider
     protected function configureDefaults(): void
     {
         Date::use(CarbonImmutable::class);
+
+        // Production links, sitemaps and cached files always name APP_URL, whichever
+        // host the request came in on.
+        if (app()->isProduction()) {
+            URL::forceRootUrl((string) config('app.url'));
+            URL::forceScheme('https');
+        }
 
         DB::prohibitDestructiveCommands(
             app()->isProduction(),

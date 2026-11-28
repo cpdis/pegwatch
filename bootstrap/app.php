@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AgentResponses;
+use App\Http\Middleware\CanonicalHost;
 use App\Http\Middleware\MarkdownPath;
 use App\Http\Middleware\RequireOAuthKeys;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
@@ -17,6 +18,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // One public host in production (see CanonicalHost).
+        $middleware->prepend(CanonicalHost::class);
         // Agents: `.md` paths are pages as Markdown; every page gets discovery Link headers.
         $middleware->prepend(MarkdownPath::class);
         $middleware->appendToGroup('web', AgentResponses::class);

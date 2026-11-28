@@ -153,7 +153,7 @@ class PegwatchTest extends TestCase
             [$runId, self::square(121.50, -30.80), $runId, self::square(121.50, -30.80)]);
 
         $text = preg_replace('/\s+/', ' ', strip_tags($this->get('/activity')->assertOk()->getContent()));
-        $this->assertStringContainsString('Added: ACME GOLD PTY LTD; removed: OLD CO PTY LTD', $text);
+        $this->assertStringContainsString('Added: ACME GOLD PTY LTD; Removed: OLD CO PTY LTD', $text);
         $this->assertStringNotContainsString('· ACME GOLD PTY LTD', $text);
     }
 

@@ -18,7 +18,7 @@
         <x-pages::auth.partials.link-form />
 
         <div x-data="{ open: @js($usePassword) }" class="flex flex-col gap-4">
-            <flux:button variant="ghost" size="sm" class="self-start" x-on:click="open = ! open" x-bind:aria-expanded="open">
+            <flux:button variant="ghost" size="sm" inset="left" class="self-start" x-on:click="open = ! open" x-bind:aria-expanded="open">
                 {{ __('Use your password instead') }}
             </flux:button>
 

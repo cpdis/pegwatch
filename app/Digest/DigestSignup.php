@@ -4,6 +4,7 @@ namespace App\Digest;
 
 use App\Mail\DigestConfirmMail;
 use App\Models\DigestSubscriber;
+use App\Support\ClientIp;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 
@@ -18,7 +19,7 @@ final class DigestSignup
     /** False when the flood limits (5 per IP each 10 minutes, 3 per address a day) say no. */
     public static function request(string $email, string $source): bool
     {
-        $ipKey = 'digest-signup:ip:'.request()->ip();
+        $ipKey = 'digest-signup:ip:'.ClientIp::of();
         $emailKey = 'digest-signup:email:'.sha1($email);
         if (RateLimiter::tooManyAttempts($ipKey, 5) || RateLimiter::tooManyAttempts($emailKey, 3)) {
             return false;

@@ -152,6 +152,7 @@ final class Sitemap
 
     private static function remember(string $key, \Closure $build): mixed
     {
-        return Cache::remember('sitemap:'.(Register::latestRun()?->id ?? 0).':'.$key, now()->addDay(), $build);
+        // The root URL is in the key so a copy built under another host is never served.
+        return Cache::remember('sitemap:'.url('/').':'.(Register::latestRun()?->id ?? 0).':'.$key, now()->addDay(), $build);
     }
 }

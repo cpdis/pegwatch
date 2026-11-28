@@ -119,9 +119,12 @@ new class extends Component {
                 <flux:button size="sm" icon="envelope" icon-trailing="chevron-down">{{ __('Email the Mining Registrar') }}</flux:button>
                 <flux:menu>
                     <flux:menu.heading>{{ __('A prewritten enquiry to the office for this ground') }}</flux:menu.heading>
+                    {{-- email_off: Cloudflare's Email Obfuscation would rewrite these, and its fix-up script does not run after wire:navigate. --}}
+                    <!--email_off-->
                     @foreach ($registrarMail as $office => $mailto)
                         <flux:menu.item :href="$mailto">{{ $office }}</flux:menu.item>
                     @endforeach
+                    <!--/email_off-->
                 </flux:menu>
             </flux:dropdown>
             <flux:button size="sm" icon="link" x-on:click="navigator.clipboard.writeText({{ Js::from($pageUrl) }}); $flux.toast({{ Js::from(__('Link copied')) }})">{{ __('Copy link') }}</flux:button>
@@ -431,7 +434,8 @@ new class extends Component {
                         <div class="wrap-anywhere max-sm:col-span-2">{{ collect($d['holders'])->pluck('name')->implode('; ') ?: __('None recorded') }}</div>
                         <div class="text-right tabular-nums max-sm:col-start-2 max-sm:row-start-1">{{ Format::pct($d['share']) }}<span class="sm:hidden"> {{ __('of this ground') }}</span></div>
                         <div class="text-zinc-600 tabular-nums max-sm:col-span-2 dark:text-zinc-300">
-                            {{ collect([$d['started_at'] ? Format::localDate($d['started_at']) : null, Format::localDate($d['ended_at'])])->filter()->implode(' to ') }}
+                            @php([$from, $to] = [$d['started_at'] ? Format::localDate($d['started_at']) : '', Format::localDate($d['ended_at'])])
+                            {{ $from !== '' ? collect([$from, $to])->filter()->implode(' to ') : ($to !== '' ? __('Ended :date', ['date' => $to]) : '') }}
                             <span class="text-zinc-500 dark:text-zinc-400">· {{ Format::sentence($d['reason']) ?: __('Ended') }}</span>
                         </div>
                     </li>

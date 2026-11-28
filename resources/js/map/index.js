@@ -17,7 +17,7 @@
 // Window events in: map-filter, map-layers (with an optional `colour` mode), map-fly, map-select, watch-start, watch-stop.
 // Window events out: map-moved, watch-shape (draw.js), map-pick (on the element).
 
-import { BASEMAP, BLANK_STYLE, DEFAULT_LAYERS, EMPTY, LAYER_GROUPS, WA_BOUNDS, addLayers, attachRendering } from './style.js';
+import { BASEMAP, BLANK_STYLE, DEFAULT_LAYERS, EMPTY, LAYER_GROUPS, WA_BOUNDS, addLayers, attachRendering, provideImages } from './style.js';
 import { attachCard } from './card.js';
 import { addControls, attachControls } from './controls.js';
 import { attachUrlState, layersFrom, parseHash } from './url.js';
@@ -71,6 +71,7 @@ export default function tenementMap(config = {}) {
                 ...view,
                 attributionControl: { compact: true, customAttribution: '© State of WA (DMPE), CC BY 4.0' },
             });
+            provideImages(map);
             addControls(map, maplibregl, this);
 
             // Only a basemap style that never loaded falls back. A tile error (sourceId set) must

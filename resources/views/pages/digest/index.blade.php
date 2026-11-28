@@ -18,13 +18,15 @@ new #[Title('Weekly WA tenement digest')] class extends Component {
                     'week' => $i->week,
                     'to' => \App\Support\Format::awst($i->period_end, false),
                     'freed' => count(json_decode($i->content, true)['freed'] ?? []),
+                    'counts' => array_filter(json_decode($i->content, true)['counts'] ?? []),
                 ]),
         ];
     }
 }; ?>
 
 <div class="max-w-2xl">
-    <flux:heading size="xl" level="1">{{ __('The WA tenement register, once a week') }}</flux:heading>
+    <x-eyebrow>{{ __('Weekly digest') }}</x-eyebrow>
+    <flux:heading size="xl" level="1" class="mt-1">{{ __('The WA tenement register, once a week') }}</flux:heading>
     <flux:text class="mt-2 text-base">
         {{ __('Every Monday night: the week\'s biggest change, the tenements that ended leaving ground no other tenement covers, the biggest new applications and who lodged them, and the compulsory releases coming up. All of Western Australia, from the department\'s own register.') }}
     </flux:text>
@@ -62,7 +64,8 @@ new #[Title('Weekly WA tenement digest')] class extends Component {
             @foreach ($issues as $i)
                 <li class="py-2">
                     <flux:link :href="route('digest.issue', ['week' => $i['week']])" wire:navigate>{{ __('Week to :date', ['date' => $i['to']]) }}</flux:link>
-                    <flux:text class="inline text-sm">· {{ trans_choice(':n tenement freed ground|:n tenements freed ground', $i['freed'], ['n' => $i['freed']]) }}</flux:text>
+                    {{-- Lead with what happened: a week with no freed ground still had changes. --}}
+                    <flux:text class="inline text-sm">· {{ $i['freed'] ? trans_choice(':n tenement freed ground|:n tenements freed ground', $i['freed'], ['n' => $i['freed']]) : ($i['counts'] ? \App\Support\FeedGroups::countLine($i['counts']) : __('no changes')) }}</flux:text>
                 </li>
             @endforeach
         </ul>

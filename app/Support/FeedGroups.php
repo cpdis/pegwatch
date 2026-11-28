@@ -35,10 +35,12 @@ class FeedGroups
     /**
      * Fold bulk lodgements: applications with the same holders and tenement
      * type, each within two days of the next, BULK_MIN or more of them. The
-     * folded row takes the place of the newest one.
+     * folded row takes the place of the newest one. Under day headings
+     * ($sameDay) a run never crosses a day, so each heading's count matches its rows.
      */
-    public static function collapse(array $items): array
+    public static function collapse(array $items, bool $sameDay = false): array
     {
+        $maxGap = $sameDay ? 0 : self::BULK_GAP_DAYS;
         $runs = [];
         foreach ($items as $i => $item) {
             if ($item['type'] !== 'application' || ! $item['holders']) {
@@ -51,7 +53,7 @@ class FeedGroups
             $last = $runs[$key] ?? null;
             $lastRun = $last ? $last[count($last) - 1] : null;
             $gap = $lastRun ? CarbonImmutable::parse(end($lastRun)['day'])->diffInDays(CarbonImmutable::parse($day), true) : null;
-            if ($gap !== null && $gap <= self::BULK_GAP_DAYS) {
+            if ($gap !== null && $gap <= $maxGap) {
                 $runs[$key][count($last) - 1][] = ['i' => $i, 'day' => $day];
             } else {
                 $runs[$key][] = [['i' => $i, 'day' => $day]];

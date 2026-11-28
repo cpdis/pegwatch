@@ -53,8 +53,8 @@ class Format
         try {
             $d = CarbonImmutable::parse($value);
 
-            // 31 Dec 2999 is the register's placeholder for "no date".
-            return $d->year >= 2999 ? '' : $d->format($withTime ? 'j M Y, g:ia' : 'j M Y');
+            // 31 Dec 2999 is the register's placeholder for "no date"; old records use 1 Jan 1800.
+            return $d->year >= 2999 || $d->year <= 1800 ? '' : $d->format($withTime ? 'j M Y, g:ia' : 'j M Y');
         } catch (Throwable) {
             return $value;
         }
@@ -162,7 +162,7 @@ class Format
     /** The two-digit mineral field number in a tenement ID ("E 24/250" is 24), or null. */
     public static function fieldNumber(?string $fmtTenid): ?string
     {
-        return preg_match('~^\s*[A-Z]{1,2}\s*(\d{2})\s*/~i', (string) $fmtTenid, $m) ? $m[1] : null;
+        return preg_match('~^\s*[A-Z]{1,3}\s*(\d{2})\s*/~i', (string) $fmtTenid, $m) ? $m[1] : null;
     }
 
     /** Where a tenement is, from its ID: the mineral district if named, else the field ("Kanowna", "Broad Arrow"). */

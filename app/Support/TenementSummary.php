@@ -203,7 +203,8 @@ class TenementSummary
             $purpose = ucfirst(ltrim(substr($purpose, strlen($name)), ' -.,'));
         }
 
-        return Str::limit(implode(' · ', array_filter([$name, $purpose])), 160);
+        // Cut at a word, not mid-word.
+        return Str::limit(implode(' · ', array_filter([$name, $purpose])), 160, preserveWords: true);
     }
 
     /** How a death reads in a sentence: "withdrawn", "declared null and void". */

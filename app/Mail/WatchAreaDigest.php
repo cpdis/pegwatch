@@ -159,8 +159,9 @@ class WatchAreaDigest extends Mailable
         }
         $line = Format::sentence($d['death_reason'] ?? 'Recorded dead').$when.'.';
         if (isset($d['uncovered_share'], $d['area_ha'])) {
-            $ha = (float) $d['area_ha'] * (float) $d['uncovered_share'];
-            $line .= ' '.number_format($ha, $ha < 10 ? 1 : 0).' ha uncovered ('.Format::pct($d['uncovered_share']).' of '.number_format((float) $d['area_ha'], 1).' ha):'
+            // Same precision as the total, so the uncovered part never reads larger than the whole.
+            $ha = min((float) $d['area_ha'], (float) $d['area_ha'] * (float) $d['uncovered_share']);
+            $line .= ' '.number_format($ha, 1).' ha uncovered ('.Format::pct($d['uncovered_share']).' of '.number_format((float) $d['area_ha'], 1).' ha):'
                 .' no other live or pending tenement over it on the register, '.Format::UNCOUNTED.'.';
         } elseif (isset($d['uncovered_share'])) {
             $line .= ' '.Format::pct($d['uncovered_share']).' of its area has no other live or pending tenement over it on the register, '.Format::UNCOUNTED.'.';

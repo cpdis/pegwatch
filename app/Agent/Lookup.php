@@ -230,7 +230,7 @@ final class Lookup
             'watching_since' => Register::watchingSince(),
             'dead_history_from' => Register::deadHistoryStart(),
             'totals' => Register::totals(),
-            'schedule' => 'Checked nightly at about 7pm AWST; the register extract is usually from about 4am AWST the same day.',
+            'schedule' => 'Checked once a night, usually done by about 7am AWST; the register extract is usually from about 4am AWST on a business day.',
             'url' => route('data'),
         ]);
     }

@@ -23,7 +23,19 @@
     $meta = fn (array $parts) => implode(' · ', array_filter($parts, fn ($p) => $p !== null && $p !== ''));
 @endphp
 
+@php
+    // The first issue starts before Pegwatch was watching: say it is a part week.
+    $since = \App\Support\Register::watchingSince();
+    $partial = $since && isset($c['period_start']) && \Carbon\CarbonImmutable::parse($c['period_start'])->lt(\Carbon\CarbonImmutable::parse($since));
+    // Applicant counts all at 1 rank nobody.
+    $applicants = array_filter($c['applicants'] ?? [], fn ($h) => $h['n'] > 1) ? $c['applicants'] : [];
+@endphp
 <div {{ $attributes }}>
+    @if ($partial)
+        <flux:callout class="mt-6" icon="information-circle" :heading="__('A part week')">
+            <flux:callout.text>{{ __('Pegwatch started watching the register on :date, so this issue covers less than a full week.', ['date' => Format::awst($since, false)]) }}</flux:callout.text>
+        </flux:callout>
+    @endif
     @if ($c['stale'] ?? false)
         <flux:callout class="mt-6" icon="clock" variant="warning" :heading="__('No new extract this week')">
             <flux:callout.text>
@@ -94,10 +106,10 @@
             <flux:text class="mt-2">{{ __('No new applications this week.') }}</flux:text>
         @endif
 
-        @if ($c['applicants'])
+        @if ($applicants)
             <flux:heading size="lg" class="mt-8">{{ __('Busiest applicants') }}</flux:heading>
             <ul class="mt-2 divide-y divide-zinc-200 dark:divide-zinc-700">
-                @foreach ($c['applicants'] as $h)
+                @foreach ($applicants as $h)
                     <li class="flex items-baseline gap-4 py-2">
                         <flux:link :href="route('holders.show', ['slug' => $h['slug']])" wire:navigate class="min-w-0 flex-1">{{ $h['name'] }}</flux:link>
                         <span class="shrink-0 text-sm tabular-nums">{{ trans_choice(':n application|:n applications', $h['n'], ['n' => $h['n']]) }}</span>
@@ -122,6 +134,9 @@
             @endforeach
         </ul>
     @else
-        <flux:text class="mt-2">{{ __('None scheduled.') }}</flux:text>
+        <flux:text class="mt-2">
+            {{ __('None were on the register when this issue was made.') }}
+            <flux:link :href="route('home')" wire:navigate>{{ __('See the releases due now on the map') }}</flux:link>.
+        </flux:text>
     @endif
 </div>

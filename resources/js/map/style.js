@@ -132,18 +132,24 @@ export const BASE_FILTERS = Object.fromEntries(LAYERS.filter((l) => l.filter).ma
 // Basemap layer and source ids per map, so a style switch keeps everything else.
 const basemaps = new WeakMap();
 
+/**
+ * Supply images the style asks for but its sprite lacks. Call right after creating the
+ * map, before the first tiles parse: OpenFreeMap's dark style wants a town dot
+ * ('circle-11'), Pegwatch fills want `pw-*` patterns, and any other missing basemap icon
+ * (such as 'wood-pattern') gets a blank pixel so MapLibre does not warn about it.
+ */
+export function provideImages(m) {
+    m.on('styleimagemissing', ({ id }) => {
+        if (m.hasImage(id)) return;
+        const image = id === 'circle-11' ? townDot() : (patternImage(id) ?? { data: { width: 1, height: 1, data: new Uint8Array(4) }, pixelRatio: 1 });
+        m.addImage(id, image.data, { pixelRatio: image.pixelRatio });
+    });
+}
+
 /** Add every Pegwatch source and layer to a loaded map. */
 export function addLayers(m) {
     const style = m.getStyle();
     basemaps.set(m, { layers: new Set(style.layers.map((l) => l.id)), sources: new Set(Object.keys(style.sources)) });
-    m.on('styleimagemissing', ({ id }) => {
-        // OpenFreeMap's dark style asks for a town dot its sprite lacks ('circle-11').
-        const image = id === 'circle-11' ? townDot() : patternImage(id);
-        if (image && !m.hasImage(id)) m.addImage(id, image.data, { pixelRatio: image.pixelRatio });
-    });
-    // A map that starts dark parsed its first basemap tiles before that handler existed.
-    if (BASEMAP === BASEMAPS.dark) for (const [id, s] of Object.entries(style.sources)) if (s.type === 'vector') m.refreshTiles(id);
-
     for (const [id, s] of Object.entries(TILE_SOURCES)) {
         m.addSource(id, { type: 'vector', tiles: [`${window.location.origin}/tiles/${id}/{z}/{x}/{y}.mvt`], maxzoom: 14, ...s });
     }
@@ -263,7 +269,7 @@ export function attachRendering(map, component) {
 
     // Chips at the top centre: what the zoomed-out shading means, and tiles loading.
     const box = Object.assign(document.createElement('div'), {
-        className: 'pointer-events-none absolute inset-x-12 top-2 z-10 flex flex-col items-center gap-1',
+        className: 'pointer-events-none absolute inset-x-12 top-2 z-10 flex flex-col items-center gap-1 max-sm:top-10',
     });
     const zoomChip = Object.assign(document.createElement('div'), {
         className: CHIP,

@@ -27,7 +27,9 @@ new #[Title('For agents')] class extends Component {
         [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:ps-5 [&_strong]:text-zinc-900 dark:[&_strong]:text-white
         [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left
         [&_th]:border-b [&_th]:border-zinc-200 [&_th]:py-2 [&_th]:pe-4 [&_th]:font-semibold dark:[&_th]:border-zinc-700
-        [&_td]:border-b [&_td]:border-zinc-100 [&_td]:py-2 [&_td]:pe-4 [&_td]:align-top dark:[&_td]:border-zinc-800">
+        [&_td]:border-b [&_td]:border-zinc-100 [&_td]:py-2 [&_td]:pe-4 [&_td]:align-top dark:[&_td]:border-zinc-800 [&_td_code]:break-all
+        max-sm:[&_thead]:hidden max-sm:[&_tbody]:block max-sm:[&_tr]:block max-sm:[&_tr]:border-b max-sm:[&_tr]:border-zinc-200 max-sm:[&_tr]:py-2 dark:max-sm:[&_tr]:border-zinc-700
+        max-sm:[&_td]:block max-sm:[&_td]:border-0 max-sm:[&_td]:py-0.5 max-sm:[&_td]:pe-0">
         {!! $html !!}
     </div>
 </div>

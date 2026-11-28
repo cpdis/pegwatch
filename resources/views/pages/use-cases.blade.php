@@ -20,7 +20,7 @@ new #[Title('How people use Pegwatch')] class extends Component {
             'who' => 'A weekend prospector and detectorist in Kalgoorlie, with a Miner\'s Right and two prospecting licences.',
             'wants' => 'To hear the night good ground near him is given up, before anyone else pegs it.',
             'steps' => [
-                ['Watch an area', 'He searches for Kurnalpi on the map, draws a 30 km circle and confirms it from his email. No password. Every night after the register changes inside it, he gets an email.', false],
+                ['Watch an area', 'He searches for Kurnalpi on the map, draws a 25 km circle and confirms it from his email. No password. Every night after the register changes inside it, he gets an email.', false],
                 ['A tenement dies', 'An alert says a prospecting licence 11 km from his own was recorded dead, reason Expired, and that 84% of its ground has no other live or pending tenement over it. Deaths whose ground is still covered by another tenement are left out, so he only reads the ones worth a drive.', false],
                 ['Check the ground', 'The tenement page shows what is over that ground now, who held it before, and any land restrictions. He turns on freed ground and the one-minute block grid to see how the patch sits against the exploration licences around it.', false],
                 ['Confirm before pegging', 'He opens TENGRAPH from the page to check nothing has been lodged since last night, and sends the prewritten enquiry to the Kalgoorlie Mining Registrar.', false],
@@ -100,7 +100,7 @@ new #[Title('How people use Pegwatch')] class extends Component {
 
     <nav class="mt-5 flex flex-wrap gap-2" aria-label="{{ __('Examples') }}">
         @foreach ($this::STORIES as $story)
-            <flux:button size="sm" variant="subtle" :href="'#'.$story['id']">{{ __($story['name']) }}</flux:button>
+            <flux:button size="sm" variant="outline" :href="'#'.$story['id']">{{ __($story['name']) }}</flux:button>
         @endforeach
     </nav>
 

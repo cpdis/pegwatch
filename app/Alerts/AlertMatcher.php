@@ -15,8 +15,12 @@ use Illuminate\Support\Facades\Mail;
  */
 class AlertMatcher
 {
-    /** When the nightly check runs, AWST (.github/workflows/nightly-ingest.yml, cron 0 11 * * * UTC). */
-    public const NIGHTLY_CHECK_AWST = '19:00';
+    /**
+     * When the nightly check is usually done, AWST. The workflow is scheduled for the
+     * evening (.github/workflows/nightly-ingest.yml) but GitHub starts it hours late,
+     * so runs finish in the early morning.
+     */
+    public const NIGHTLY_CHECK_AWST = '07:00';
 
     /** A death leaving less ground than this with no other blocking tenement over it is not news (G15). */
     public const MIN_UNCOVERED_HA = 1;
@@ -123,13 +127,13 @@ class AlertMatcher
         ));
     }
 
-    /** "today about 7pm AWST" or "tomorrow about 7pm AWST": when changes are next looked for. */
+    /** "today, by about 7am AWST" or "tomorrow, by about 7am AWST": when changes are next looked for. */
     public static function nextCheck(): string
     {
         $now = CarbonImmutable::now('Australia/Perth');
         $next = $now->setTimeFromTimeString(self::NIGHTLY_CHECK_AWST);
 
-        return ($next->isAfter($now) ? __('today') : __('tomorrow')).' '.__('about :time AWST', ['time' => $next->format('ga')]);
+        return ($next->isAfter($now) ? __('today') : __('tomorrow')).__(', by about :time AWST', ['time' => $next->format('ga')]);
     }
 
     private static function match(): string

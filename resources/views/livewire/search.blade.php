@@ -37,7 +37,7 @@ new class extends Component {
         // can't be dodged by dropping cookies; the IP limit catches
         // someone minting sessions. Behind Laravel Cloud's Cloudflare edge
         // the client address is in CF-Connecting-IP.
-        $ip = request()->header('CF-Connecting-IP') ?: request()->ip();
+        $ip = \App\Support\ClientIp::of();
         foreach (['search:s:'.session()->getId() => self::PER_SESSION, 'search:ip:'.$ip => self::PER_IP] as $key => $max) {
             if (RateLimiter::tooManyAttempts($key, $max)) {
                 $this->limited = true;
@@ -86,7 +86,9 @@ new class extends Component {
     x-on:place-chosen.window="
         $flux.modal('search').close();
         const [lng, lat] = $event.detail.center;
-        location.pathname === '/' && document.querySelector('[x-data^=tenementMap]')
+        location.pathname === '/watch' && document.querySelector('[x-data^=tenementMap]')
+            ? $dispatch('watch-start', { center: [lng, lat], radiusKm: 25 })
+            : location.pathname === '/' && document.querySelector('[x-data^=tenementMap]')
             ? $dispatch('map-fly', { center: [lng, lat], zoom: $event.detail.zoom })
             : window.location.assign('/#map=' + $event.detail.zoom + '/' + lat + '/' + lng);
     ">

@@ -21,7 +21,9 @@ new #[Title('Watch an area')] class extends Component {
         $shape = $this->tenement !== null ? WatchShape::tenement($this->tenement)
             : ($this->holder !== null ? WatchShape::holder($this->holder) : null);
 
-        return ['shape' => $shape, 'bounds' => $shape?->bounds(), 'highlight' => $shape?->geometry()];
+        // With nothing chosen, open on Kalgoorlie, the busiest goldfields ground, not the
+        // middle of the state. A map position in the URL (#map=...) still wins.
+        return ['shape' => $shape, 'bounds' => $shape?->bounds() ?? [121.1, -31.1, 121.9, -30.4], 'highlight' => $shape?->geometry()];
     }
 }; ?>
 
