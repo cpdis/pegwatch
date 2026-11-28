@@ -30,11 +30,13 @@ class PlansPageTest extends TestCase
             ->assertSee('20 places at the pre-sale price.');
     }
 
-    public function test_the_goal_shows_places_taken_once_a_few_are(): void
+    public function test_the_goal_counts_paid_places_once_a_few_are(): void
     {
         foreach (range(1, 6) as $i) {
-            DB::table('presales')->insert(['plan' => 'prospector', 'email' => "p$i@example.com", 'source' => 'pro-page', 'status' => 'reserved', 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('presales')->insert(['plan' => 'prospector', 'email' => "p$i@example.com", 'source' => 'pro-page', 'status' => 'paid', 'created_at' => now(), 'updated_at' => now()]);
         }
+        // A free reservation is not a place taken.
+        DB::table('presales')->insert(['plan' => 'prospector', 'email' => 'r@example.com', 'source' => 'pro-page', 'status' => 'reserved', 'created_at' => now(), 'updated_at' => now()]);
 
         $this->get('/pro')->assertSee('6 of 20 pre-sale places taken');
     }

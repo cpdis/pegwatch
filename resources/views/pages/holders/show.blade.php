@@ -238,7 +238,9 @@ new class extends Component {
                             <flux:chart.axis.tick />
                             <flux:chart.axis.line />
                         </flux:chart.axis>
-                        <flux:chart.axis axis="y" tick-count="3">
+                        {{-- Whole-number ticks: half a tenement means nothing. --}}
+                        @php($yTop = (int) max(2, 2 * ceil(max(array_map(fn ($r) => max((int) $r['applications'], (int) $r['deaths']), $chart) ?: [0]) / 2)))
+                        <flux:chart.axis axis="y" :tick-values="[0, $yTop / 2, $yTop]">
                             <flux:chart.axis.grid />
                             <flux:chart.axis.tick />
                         </flux:chart.axis>

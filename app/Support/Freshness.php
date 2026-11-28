@@ -33,7 +33,8 @@ final class Freshness
 
         return new self(
             $extract,
-            (bool) $run->stale || $extract->diffInHours($now) > self::STALE_AFTER_HOURS,
+            // Age alone decides: a run that found the same extract is normal on a weekend.
+            Register::isStale($run, $now),
             $check ? CarbonImmutable::parse($check)->setTimezone('Australia/Perth') : null,
             $now,
         );

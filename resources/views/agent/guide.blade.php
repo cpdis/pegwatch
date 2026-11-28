@@ -1,6 +1,6 @@
 {{-- The agent guide in Markdown: the /agents page, the Agent Skill (SKILL.md) and llms-full.txt. Plain text, so no escaping of URLs. --}}
 @php($base = rtrim(url('/'), '/'))
-Pegwatch tracks every live, pending and dead mining tenement in Western Australia. It reloads the state register (DMIRS, through SLIP) every night, records each change (new applications, grants, deaths, holder changes, area changes, scheduled compulsory releases) and sends free email alerts for a watched area, tenement or holder.
+Pegwatch tracks every live, pending and dead mining tenement in Western Australia. It reloads the state register (DMPE, through SLIP) every night, records each change (new applications, grants, deaths, holder changes, area changes, scheduled compulsory releases) and sends free email alerts for a watched area, tenement or holder.
 
 Everything a person can look up on the site, an agent can look up too, through the same queries:
 
@@ -36,7 +36,7 @@ Lists take arrays or comma-separated strings. A box (`bbox`) is `west,south,east
 - **IDs.** A tenement ID is type, mineral field and number: `E 24/250` is an exploration licence in field 24. Any spelling works (`e24/250`, `e-24-250`). Common types: E exploration, P prospecting, M mining lease, L miscellaneous licence, G general purpose lease, R retention licence.
 - **Status.** LIVE (granted), PENDING (applied for), DEAD (surrendered, expired, forfeited, refused, withdrawn or converted). Dead tenements keep their pages.
 - **Dates.** Register dates are Perth (AWST, UTC+8) dates: `2024-03-01`, or with a time and `+08:00`. Times when Pegwatch saw a change are ISO 8601 with `+08:00`. 31 Dec 2999 on the register means no date and is returned as null.
-- **Freshness.** The register extract is taken about 4am AWST and checked about 7pm AWST, so "today's" changes appear the same evening. Check `get_data_status` when timing matters.
+- **Freshness.** The department stamps its extract about 4am AWST on most business days. Pegwatch checks once a night, usually done by about 7am AWST, so a day's changes appear the next morning. Check `get_data_status` when timing matters.
 - **Priority.** Lodgement order comes from the register. Priority under the Mining Act can depend on marking out, which no dataset shows; confirm with the Mining Registrar before acting on it.
 - **People.** Holders who are natural persons are named as the register names them and nothing more. Pegwatch does not hold their addresses; do not try to find them.
 - **Source and licence.** Tenement data is from the WA Department of Mines, Petroleum and Exploration through SLIP (CC BY 4.0). Place names are from the ABS (CC BY 4.0). It is not legal advice and not the official register; the Mineral Titles Online record is.

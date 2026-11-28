@@ -192,7 +192,7 @@ new class extends Component {
         @else
             <flux:callout icon="cursor-arrow-rays">
                 <flux:callout.heading>{{ __('Pick the ground on the map') }}</flux:callout.heading>
-                <flux:callout.text>{{ __('Click the map to centre a circle, then set its size. To watch one tenement or a holder, use Watch on its page.') }}</flux:callout.text>
+                <flux:callout.text>{{ __('Tap or click the map to centre a circle, then set its size. To watch one tenement or a holder, use Watch on its page.') }}</flux:callout.text>
             </flux:callout>
         @endif
     @else
@@ -202,6 +202,15 @@ new class extends Component {
             @endif
             <div>
                 <flux:text class="text-sm font-medium text-zinc-800 dark:text-zinc-100">{{ $shape->describe() }}</flux:text>
+                @if (! $compact && $shape->kind === 'circle')
+                    {{-- On the watch page: how to move the circle without leaving the page. --}}
+                    <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <flux:modal.trigger name="search">
+                            <flux:button size="sm" icon="magnifying-glass">{{ __('Find a town') }}</flux:button>
+                        </flux:modal.trigger>
+                        <flux:text class="text-xs">{{ __('Or drag the circle\'s centre to move it and its edge to resize it.') }}</flux:text>
+                    </div>
+                @endif
                 @if ($s)
                     <flux:text class="mt-1 text-sm tabular-nums" data-test="watch-counts">
                         {{ $shape->isArea() ? __('Inside today:') : __('Holds today:') }}

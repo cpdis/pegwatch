@@ -236,7 +236,7 @@ class DiscoveryController extends Controller
 
     private function llmsText(): string
     {
-        return Cache::remember('llms-txt:'.(Register::latestRun()?->id ?? 0), now()->addHour(), function () {
+        return Cache::remember('llms-txt:'.url('/').':'.(Register::latestRun()?->id ?? 0), now()->addHour(), function () {
             $totals = Register::totals();
             $run = Register::latestRun();
             $base = rtrim(url('/'), '/');

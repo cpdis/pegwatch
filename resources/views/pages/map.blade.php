@@ -379,11 +379,5 @@ new #[Layout('layouts::map'), Title('WA tenement map')] class extends Component 
                 <div x-ref="map" class="h-full w-full"></div>
             </div>
         </div>
-        {{-- PH1: on phones the search sits on the map. --}}
-        <flux:modal.trigger name="search" class="absolute inset-x-3 top-3 me-12 sm:hidden">
-            <button type="button" class="flex min-h-11 w-full items-center gap-2 rounded-full bg-white px-4 text-sm text-zinc-500 shadow-lg dark:bg-zinc-800 dark:text-zinc-300">
-                <flux:icon.magnifying-glass variant="mini" />{{ __('Tenement, holder or place') }}
-            </button>
-        </flux:modal.trigger>
     </div>
 </div>

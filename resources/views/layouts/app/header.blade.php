@@ -114,6 +114,9 @@
                 <a class="ms-1 font-medium whitespace-nowrap text-white underline decoration-accent underline-offset-2" href="{{ route('data') }}" wire:navigate>{{ __('Data and disclaimer') }}</a>
                 <a class="ms-1 font-medium whitespace-nowrap text-white underline decoration-accent underline-offset-2" href="{{ route('use-cases') }}" wire:navigate>{{ __('How people use it') }}</a>
                 <a class="ms-1 font-medium whitespace-nowrap text-white underline decoration-accent underline-offset-2" href="{{ route('agents') }}" wire:navigate>{{ __('For agents') }}</a>
+                <a class="ms-1 whitespace-nowrap text-zinc-200 underline decoration-zinc-600 underline-offset-2 hover:text-white" href="{{ route('terms') }}" wire:navigate>{{ __('Terms') }}</a>
+                <a class="ms-1 whitespace-nowrap text-zinc-200 underline decoration-zinc-600 underline-offset-2 hover:text-white" href="{{ route('privacy') }}" wire:navigate>{{ __('Privacy') }}</a>
+                <x-support-email class="ms-1 whitespace-nowrap text-zinc-200 decoration-zinc-600 hover:text-white" />
             </p>
         </footer>
 

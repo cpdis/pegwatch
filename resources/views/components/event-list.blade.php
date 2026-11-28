@@ -18,11 +18,12 @@
             $filtered && $context === 'map' => __('No changes on the register in this part of the map. Move or zoom out to see more.'),
             (bool) $filtered => __('No changes match these filters. Widen the dates or clear a filter.'),
             $run === null || Register::baselineOnly() => __('Pegwatch has its first copy of the register. Changes show here from the next extract.'),
+            // A tenement or holder that never changed says so, whatever the register's age.
+            $context === 'tenement' && $subject => __('No changes to :id since Pegwatch started watching on :date.', ['id' => $subject, 'date' => $since]),
+            $context === 'holder' && $subject => __('No changes to :name\'s tenements since Pegwatch started watching on :date.', ['name' => $subject, 'date' => $since]),
             Register::isStale($run) => __('No changes since :date: the department has not published a new extract. We check every night.', [
                 'date' => \Carbon\CarbonImmutable::parse($run->tenements_extract)->setTimezone('Australia/Perth')->format('j M'),
             ]),
-            $context === 'tenement' && $subject => __('No changes to :id since Pegwatch started watching on :date.', ['id' => $subject, 'date' => $since]),
-            $context === 'holder' && $subject => __('No changes to :name\'s tenements since Pegwatch started watching on :date.', ['name' => $subject, 'date' => $since]),
             default => __('No changes since Pegwatch started watching on :date.', ['date' => $since]),
         };
     @endphp
@@ -42,7 +43,7 @@
     </div>
 @else
     @php
-        $entries = FeedGroups::collapse(array_values($events));
+        $entries = FeedGroups::collapse(array_values($events), sameDay: $days !== null);
         $groups = $days !== null ? FeedGroups::byDay($entries) : [['day' => null, 'entries' => $entries]];
     @endphp
     <div {{ $attributes }}>
@@ -87,9 +88,9 @@
                             <span class="inline-block size-2 shrink-0 translate-y-[-1px] rounded-full dark:ring-1 dark:ring-white/60" style="background: {{ Format::eventColour($e['type']) }}"></span>
                             <span class="font-medium">{{ $e['label'] }}</span>
                             @if ($e['slug'] ?? null)
-                                <flux:link :href="route('tenements.show', $e['slug'])" wire:navigate class="tabular-nums">{{ $e['fmt_tenid'] }}</flux:link>
+                                <flux:link :href="route('tenements.show', $e['slug'])" wire:navigate class="whitespace-nowrap tabular-nums">{{ $e['fmt_tenid'] }}</flux:link>
                             @else
-                                <span class="tabular-nums">{{ $e['fmt_tenid'] }}</span>
+                                <span class="whitespace-nowrap tabular-nums">{{ $e['fmt_tenid'] }}</span>
                             @endif
                             @if (! $days)
                                 <span class="ms-auto shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">{{ Format::localDate($e['at'] ?? null) }}</span>

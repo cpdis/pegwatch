@@ -3,6 +3,7 @@
 namespace App\Auth;
 
 use App\Models\User;
+use App\Support\ClientIp;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -47,7 +48,7 @@ final class MagicLink
      */
     public static function allowSend(string $scope, string $email, int $perIp = 5, int $perEmail = 3, int $emailWindow = 86400): bool
     {
-        $ipKey = $scope.':ip:'.request()->ip();
+        $ipKey = $scope.':ip:'.ClientIp::of();
         $emailKey = $scope.':email:'.sha1($email);
         if (RateLimiter::tooManyAttempts($ipKey, $perIp) || RateLimiter::tooManyAttempts($emailKey, $perEmail)) {
             return false;

@@ -48,6 +48,8 @@ Route::post('hooks/ingest-complete', IngestHookController::class)
 // signed URL.
 Route::livewire('data', 'pages::data')->name('data');
 Route::livewire('how-people-use-pegwatch', 'pages::use-cases')->name('use-cases');
+Route::livewire('terms', 'pages::terms')->name('terms');
+Route::livewire('privacy', 'pages::privacy')->name('privacy');
 Route::get('og/tenements/{slug}.png', [OgImageController::class, 'tenement'])
     ->where('slug', '[a-z0-9-]+')->withoutMiddleware('web')->name('og.tenement');
 Route::get('og/areas/{watchArea}.png', [OgImageController::class, 'area'])

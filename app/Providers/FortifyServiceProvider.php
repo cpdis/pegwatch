@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Middleware\RequirePasswordIfSet;
+use App\Support\ClientIp;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -76,7 +77,7 @@ class FortifyServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('login', function (Request $request) {
-            $throttleKey = Str::transliterate(Str::lower($request->input(Fortify::username())).'|'.$request->ip());
+            $throttleKey = Str::transliterate(Str::lower($request->input(Fortify::username())).'|'.ClientIp::of($request));
 
             return Limit::perMinute(5)->by($throttleKey);
         });

@@ -84,6 +84,10 @@ new #[Title('Data and disclaimer')] class extends Component {
                             @if ($run->stale)
                                 <flux:badge size="sm" color="amber" class="max-sm:mt-1 max-sm:flex max-sm:w-fit sm:ms-1">{{ __('Same extract') }}</flux:badge>
                             @endif
+                            {{-- Phones hide the Result column, so a failed check says so here. --}}
+                            @if ($run->status === 'failed')
+                                <flux:badge size="sm" color="red" class="mt-1 flex w-fit sm:hidden">{{ __('Failed') }}</flux:badge>
+                            @endif
                         </flux:table.cell>
                         <flux:table.cell align="end">{{ number_format($run->events) }}</flux:table.cell>
                         <flux:table.cell class="max-sm:hidden">{{ $status[$run->status] ?? Format::sentence($run->status) }}</flux:table.cell>

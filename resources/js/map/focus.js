@@ -94,6 +94,14 @@ export function attachFocus(map, config) {
             source('pw-focus', asCollection(focus.features));
             add({ id: 'pw-focus-fill', type: 'fill', source: 'pw-focus', paint: { 'fill-color': statusColour, 'fill-opacity': 0.3 } });
             add({ id: 'pw-focus-line', type: 'line', source: 'pw-focus', paint: { 'line-color': statusColour, 'line-width': 1.5 } });
+            // The holder's own IDs, above the veil, so a muted neighbour's label never wins the spot.
+            if (map.getStyle().glyphs) {
+                add({
+                    id: 'pw-focus-label', type: 'symbol', source: 'pw-focus', minzoom: 9,
+                    layout: { 'text-field': ['get', 'fmt_tenid'], 'text-font': ['Noto Sans Bold'], 'text-size': 11 },
+                    paint: { 'text-color': dark ? '#ffffff' : '#18181b', 'text-halo-color': dark ? '#0b0b0c' : '#ffffff', 'text-halo-width': 1.5 },
+                });
+            }
         }
         if (context) {
             source('pw-context', asCollection(config.highlight));

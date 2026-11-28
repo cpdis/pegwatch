@@ -52,20 +52,21 @@ class GlobalPagesTest extends TestCase
         $this->assertStringContainsString('href="'.route('data').'"', $html);
     }
 
-    public function test_the_chip_turns_amber_with_the_age_when_the_run_is_stale_or_the_extract_is_over_72_hours_old(): void
+    public function test_the_chip_turns_amber_with_the_age_only_when_the_extract_is_over_72_hours_old(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-11-23 06:00:00', 'UTC'));
-        // Stale by the run's flag alone: the extract is only 34 hours old.
+        // A run that found the same extract (a weekend) is not stale: the extract is only 34 hours old.
         $run = self::seedRegister('2026-11-21 20:11:00+00', stale: true);
 
         $chip = $this->between($this->get('/')->assertOk()->getContent(), 'data-test="freshness-chip"', '</button>');
-        $this->assertStringContainsString('Register 22 Nov · 1 day old', $chip);
-        $this->assertStringContainsString('bg-amber-500', $chip);
+        $this->assertStringContainsString('Register 22 Nov, 4:11am', $chip);
+        $this->assertStringNotContainsString('bg-amber-500', $chip);
 
-        // Not stale by the run's flag, but the extract is four days old.
+        // The extract is four days old.
         DB::table('ingest_runs')->where('id', $run)->update(['stale' => false, 'tenements_extract' => '2026-11-18 20:11:00+00']);
         $chip = $this->between($this->get('/')->getContent(), 'data-test="freshness-chip"', '</button>');
         $this->assertStringContainsString('Register 19 Nov · 4 days old', $chip);
+        $this->assertStringContainsString('bg-amber-500', $chip);
 
         // The phone menu carries the same words.
         $this->get('/')->assertSee('data-test="freshness-inline"', false);

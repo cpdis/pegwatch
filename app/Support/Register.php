@@ -383,6 +383,13 @@ class Register
     public static function summarise(string $type, array $d): string
     {
         $pct = fn ($v) => $v === null ? null : round((float) $v * 100).'%';
+        // Hectares with thousands separators: "17,710.02 ha".
+        $ha = fn ($v) => is_numeric($v) ? number_format((float) $v, 2) : '?';
+        // Only the parts that happened: "Added: X", "Removed: Y" or both.
+        $holders = fn (array $d) => implode('; ', array_filter([
+            ($d['added'] ?? []) ? 'Added: '.implode(', ', $d['added']) : null,
+            ($d['removed'] ?? []) ? 'Removed: '.implode(', ', $d['removed']) : null,
+        ])) ?: 'Holders changed';
 
         return match ($type) {
             'death' => match ($d['kind'] ?? 'ended') {
@@ -392,11 +399,11 @@ class Register
                     ? 'Other tenements cover all of it.'
                     : ($pct($d['uncovered_share'] ?? null) ?? '?').' of its area has no other live or pending tenement over it, L, G and special prospecting licences aside.')),
             },
-            'application' => ($d['area_ha'] ?? '?').' ha applied for',
+            'application' => $ha($d['area_ha'] ?? null).' ha applied for',
             'grant' => 'Pending to live',
-            'holder_change' => 'Added: '.implode(', ', $d['added'] ?? []).'; removed: '.implode(', ', $d['removed'] ?? []),
-            'shrink' => ($d['changed_ha'] ?? '?').' ha removed'.(($d['released'] ?? false) ? ' (compulsory surrender)' : ''),
-            'grow' => ($d['changed_ha'] ?? '?').' ha added',
+            'holder_change' => $holders($d),
+            'shrink' => $ha($d['changed_ha'] ?? null).' ha removed'.(($d['released'] ?? false) ? ' (compulsory surrender)' : ''),
+            'grow' => $ha($d['changed_ha'] ?? null).' ha added',
             'release_scheduled', 'released', 'release_cancelled' => ($d['release_id'] ?? '').' at '.self::awst($d['release_at'] ?? null),
             'status_change' => ($d['from'] ?? '?').' to '.($d['to'] ?? '?'),
             'reappeared' => 'Back after being recorded dead',
@@ -880,7 +887,7 @@ class Register
             )
             select case when grouping(field) = 1 then 'WA' else coalesce(field, '') end as field, count(*) as n,
                    percentile_cont(0.5) within group (order by extract(epoch from granted - applied) / 86400 / 30.4375) as months
-            from (select substring(fmt_tenid from '^\s*[A-Za-z]{1,2}\s*(\d{2})\s*/') as field, applied, granted from g) x
+            from (select substring(fmt_tenid from '^\s*[A-Za-z]{1,3}\s*(\d{2})\s*/') as field, applied, granted from g) x
             group by rollup (field)
             SQL,
             [$typeCode, $typeCode]
@@ -1233,10 +1240,15 @@ class Register
     private const NOW_LOCAL = "(now() at time zone 'Australia/Perth')";
 
     /** Show as stale when the run found no new extract, or the extract is over 72 hours old (weekends stay calm). */
-    public static function isStale(?object $run): bool
+    /**
+     * True when the extract is over Freshness::STALE_AFTER_HOURS old. A run that found
+     * the same extract as the night before ($run->stale) is not stale by itself: the
+     * department publishes nothing at weekends.
+     */
+    public static function isStale(?object $run, ?CarbonImmutable $now = null): bool
     {
-        return $run !== null && ($run->stale || ($run->tenements_extract !== null
-            && CarbonImmutable::parse($run->tenements_extract)->lt(now()->subHours(72))));
+        return $run?->tenements_extract !== null
+            && CarbonImmutable::parse($run->tenements_extract)->lt(($now ?? now())->subHours(Freshness::STALE_AFTER_HOURS));
     }
 
     /** True until a nightly run has compared two extracts: Pegwatch has only its first copy of the register. */

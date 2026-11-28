@@ -5,13 +5,19 @@
 <title>{{ $meta->title }}</title>
 
 <meta name="description" content="{{ $meta->description }}" />
-<link rel="canonical" href="{{ $meta->canonical }}" />
+{{-- An error page (errors/404 binds pegwatch.error-page) is not indexed and claims no URL. --}}
+@php($errorPage = app()->bound('pegwatch.error-page'))
+@if ($errorPage)
+    <meta name="robots" content="noindex" />
+@else
+    <link rel="canonical" href="{{ $meta->canonical }}" />
+    <meta property="og:url" content="{{ $meta->canonical }}" />
+@endif
 <meta property="og:site_name" content="{{ \App\Support\PageMeta::SITE_NAME }}" />
 <meta property="og:type" content="website" />
 <meta property="og:locale" content="en_AU" />
 <meta property="og:title" content="{{ $meta->shareTitle }}" />
 <meta property="og:description" content="{{ $meta->description }}" />
-<meta property="og:url" content="{{ $meta->canonical }}" />
 <meta name="twitter:title" content="{{ $meta->shareTitle }}" />
 <meta name="twitter:description" content="{{ $meta->description }}" />
 @if ($meta->image)
@@ -38,7 +44,7 @@
 <link rel="ai-catalog" href="{{ route('wellknown.ai-catalog') }}" />
 <link rel="api-catalog" href="{{ route('wellknown.api-catalog') }}" />
 <link rel="service-doc" href="{{ route('agents') }}" />
-@if ($jsonLd = \App\Agent\StructuredData::for(request(), $meta))
+@if (! $errorPage && ($jsonLd = \App\Agent\StructuredData::for(request(), $meta)))
     <script type="application/ld+json">{!! json_encode($jsonLd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) !!}</script>
 @endif
 

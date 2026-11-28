@@ -175,7 +175,7 @@ class AlertsTest extends TestCase
             $this->assertSame('Kal east: 1 release scheduled, 1 tenement dead', $m->envelope()->subject);
             $this->assertSame(['releases', 'deaths'], array_keys($m->groups()));
             $this->assertStringContainsString('Part releases '.$releaseAt->format('D j M Y').', 8:30am AWST (in 9 days)', $html);
-            $this->assertStringContainsString('Surrendered on 16 Nov 2026. 112 ha uncovered (93% of 120.4 ha)', $html);
+            $this->assertStringContainsString('Surrendered on 16 Nov 2026. 112.0 ha uncovered (93% of 120.4 ha)', $html);
             $this->assertStringContainsString('Exploration licence', $html);
             $this->assertStringContainsString('extract of', $html);
             $this->assertStringNotContainsString('@if', $html);

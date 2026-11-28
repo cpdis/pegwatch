@@ -1,11 +1,14 @@
 <?php
 
 use App\Alerts\AlertPreview;
+use App\Presale\Presales;
 use App\Presale\Stripe;
+use App\Support\ClientIp;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
@@ -13,8 +16,8 @@ use Livewire\Component;
 
 /**
  * The paid plans and the Prospector pre-sale (plan step 2). With Stripe set
- * up, "Pre-order" goes to Stripe Checkout; without it, it records a
- * reservation so demand is still counted.
+ * up, "Pre-order" goes to Stripe Checkout; without it, or once the pre-sale
+ * places are gone, it records a reservation so demand is still counted.
  */
 new #[Title('Plans')] class extends Component {
     public string $email = '';
@@ -23,6 +26,10 @@ new #[Title('Plans')] class extends Component {
 
     #[Url(as: 'thanks')]
     public string $thanks = '';
+
+    /** Stripe's Checkout Session id on the way back from paying; the page checks it. */
+    #[Url(as: 'session_id')]
+    public string $sessionId = '';
 
     #[Locked]
     public string $source = 'pro-page';
@@ -41,6 +48,30 @@ new #[Title('Plans')] class extends Component {
         $this->resetValidation();
     }
 
+    /**
+     * On ?thanks=paid: 'confirmed' only when this session is paid (from the webhook or
+     * asked of Stripe now), 'pending' when Stripe has not finished, else 'unknown'. A
+     * bare ?thanks=paid never claims a payment.
+     */
+    #[Computed]
+    public function paidState(): string
+    {
+        $row = $this->sessionId !== '' ? DB::table('presales')->where('stripe_session_id', $this->sessionId)->first() : null;
+        if (! $row) {
+            return 'unknown';
+        }
+        if ($row->status === 'paid') {
+            return 'confirmed';
+        }
+        // The webhook can land after the buyer does: ask Stripe directly.
+        $session = Stripe::enabled() ? app(Stripe::class)->session($this->sessionId) : null;
+        if ($session && Presales::markPaid($session)) {
+            return 'confirmed';
+        }
+
+        return 'pending';
+    }
+
     public function reserve(): void
     {
         $this->email = Str::lower(trim($this->email));
@@ -48,7 +79,7 @@ new #[Title('Plans')] class extends Component {
             'email' => ['required', 'string', 'email:rfc', 'max:254'],
             'plan' => ['required', 'in:prospector,team'],
         ]);
-        $key = 'presale:ip:'.request()->ip();
+        $key = 'presale:ip:'.ClientIp::of();
         if (RateLimiter::tooManyAttempts($key, 5)) {
             $this->addError('email', __('Too many attempts from here. Try again later.'));
 
@@ -56,7 +87,8 @@ new #[Title('Plans')] class extends Component {
         }
         RateLimiter::hit($key, 600);
 
-        $checkout = $this->plan === 'prospector' && Stripe::enabled();
+        $soldOut = $this->plan === 'prospector' && Presales::soldOut();
+        $checkout = $this->plan === 'prospector' && Stripe::enabled() && ! $soldOut;
         $id = DB::table('presales')->insertGetId([
             'plan' => $this->plan, 'email' => $this->email, 'source' => $this->source,
             'status' => $checkout ? 'checkout' : 'reserved', 'created_at' => now(), 'updated_at' => now(),
@@ -67,9 +99,12 @@ new #[Title('Plans')] class extends Component {
                 $session = app(Stripe::class)->checkout($id, $this->email,
                     route('pro', ['thanks' => 'paid']), route('pro'));
             } catch (Throwable $e) {
+                // Say so: a reservation here would tell a buyer they hold a place they never paid for.
                 Log::error('Pre-sale checkout failed', ['presale' => $id, 'error' => $e->getMessage()]);
-                DB::table('presales')->where('id', $id)->update(['status' => 'reserved', 'updated_at' => now()]);
-                $this->thanks = 'reserved';
+                DB::table('presales')->where('id', $id)->update(['status' => 'failed', 'updated_at' => now()]);
+                $this->addError('email', __('We could not open the payment page. Nothing was charged. Try again in a few minutes, or write to :email.', [
+                    'email' => config('pegwatch.business.support_email'),
+                ]));
 
                 return;
             }
@@ -79,18 +114,26 @@ new #[Title('Plans')] class extends Component {
             return;
         }
 
-        $this->thanks = $this->plan === 'team' ? 'team' : 'reserved';
+        $this->thanks = match (true) {
+            $this->plan === 'team' => 'team',
+            $soldOut => 'waitlist',
+            default => 'reserved',
+        };
+        $this->reset('email');
+        // The confirmation is at the top of the page.
+        $this->js("window.scrollTo({ top: 0, behavior: 'smooth' })");
     }
 
     public function with(): array
     {
         return [
             'price' => config('pegwatch.presale.price_label'),
-            'paidCount' => DB::table('presales')->where('plan', 'prospector')->whereIn('status', ['paid', 'reserved'])
-                ->distinct()->count('email'),
+            'paidCount' => Presales::paidCount(),
             'goal' => config('pegwatch.presale.goal'),
+            'soldOut' => Presales::soldOut(),
             'stripe' => Stripe::enabled(),
             'preview' => AlertPreview::sample(),
+            'business' => config('pegwatch.business'),
         ];
     }
 }; ?>
@@ -99,15 +142,18 @@ new #[Title('Plans')] class extends Component {
     // true: included, false: not included, string: included with a note.
     $rows = [
         [__('Map of live, pending and dead tenements'), true, true, true],
-        [__('Tenement and holder pages'), true, __('With full history'), __('With full history')],
+        [__('Tenement and holder pages, with the history Pegwatch holds'), true, true, true],
         [__('Watch areas'), __('1 area'), __('Unlimited'), __('Unlimited, shared across the team')],
         [__('Holder watches'), __('1 holder'), __('Unlimited'), __('Unlimited')],
         [__('Alerts'), __('Tenement dead and release scheduled, with a calendar file and reminders'), __('Every type: applications, shrinkage, grants, transfers, expiry'), __('Every type')],
         [__('GPX and KML exports for GPS and detector apps'), false, true, true],
+        [__('CSV export of a holder\'s tenements'), false, true, true],
         [__('Lookups for AI agents and scripts (MCP server and API)'), true, true, true],
-        [__('Bulk CSV and GeoJSON exports, and an API to manage the team\'s watches'), false, false, true],
+        [__('Bulk CSV and GeoJSON exports of every watch, and an API to manage the team\'s watches'), false, false, true],
         [__('Weekly WA digest'), true, true, true],
     ];
+    $plans = [__('Free'), __('Prospector'), __('Team')];
+    $tax = $business['gst_registered'] ? __('Prices include GST.') : __('Prices are in Australian dollars. No GST is charged: Pegwatch is not registered for GST.');
     $toEmail = "\$nextTick(() => { const el = document.getElementById('presale-email'); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus({ preventScroll: true }) })";
 @endphp
 
@@ -119,9 +165,21 @@ new #[Title('Plans')] class extends Component {
     </flux:text>
     <flux:link class="mt-2 inline-block text-sm" :href="route('use-cases')" wire:navigate>{{ __('See how a prospector, a tenement manager, an investor and a consultant might use it') }}</flux:link>
 
-    @if ($thanks === 'paid')
+    @if ($thanks === 'paid' && $this->paidState === 'confirmed')
         <flux:callout class="mt-6" icon="check-circle" variant="success" :heading="__('Thank you, your pre-order is in')">
-            <flux:callout.text>{{ __('Stripe will email your receipt. We\'ll email you when Prospector goes live, and your first year starts then.') }}</flux:callout.text>
+            <flux:callout.text>{{ __('Stripe will email your receipt, and we\'ve emailed what happens next. Your first year starts the day Prospector goes live.') }}</flux:callout.text>
+        </flux:callout>
+    @elseif ($thanks === 'paid' && $this->paidState === 'pending')
+        <flux:callout class="mt-6" icon="clock" variant="warning" :heading="__('Your payment is still going through')">
+            <flux:callout.text>{{ __('Stripe has not confirmed it yet. We\'ll email you when it does. If no email comes within an hour, write to :email.', ['email' => $business['support_email']]) }}</flux:callout.text>
+        </flux:callout>
+    @elseif ($thanks === 'paid')
+        <flux:callout class="mt-6" icon="information-circle" :heading="__('We could not find that payment')">
+            <flux:callout.text>{{ __('If you paid, Stripe has emailed you a receipt. Write to :email with it and we\'ll sort it out.', ['email' => $business['support_email']]) }}</flux:callout.text>
+        </flux:callout>
+    @elseif ($thanks === 'waitlist')
+        <flux:callout class="mt-6" icon="check-circle" variant="success" :heading="__('You\'re on the list')">
+            <flux:callout.text>{{ __('The pre-sale places are gone. We\'ll email you when Prospector goes live. Nothing is charged.') }}</flux:callout.text>
         </flux:callout>
     @elseif ($thanks === 'reserved')
         <flux:callout class="mt-6" icon="check-circle" variant="success" :heading="__('Your place is reserved')">
@@ -172,9 +230,17 @@ new #[Title('Plans')] class extends Component {
                 <flux:badge color="amber" size="sm">{{ __('Pre-sale') }}</flux:badge>
             </div>
             <flux:text class="mt-1"><span class="text-2xl font-semibold text-zinc-900 dark:text-white">{{ $price }}</span> {{ __('a year') }}</flux:text>
-            <flux:text class="mt-2 text-sm">{{ __('For prospectors and detectorists. Your year starts the day Prospector goes live, and you can ask for a full refund until then.') }}</flux:text>
+            <flux:text class="mt-2 text-sm">
+                @if ($stripe)
+                    {{ __('For prospectors and detectorists. Pay now; your year starts the day Prospector goes live, and you can ask for a full refund until then.') }}
+                @else
+                    {{ __('For prospectors and detectorists. Reserve now for free; we\'ll email you when you can pay. Your year starts the day Prospector goes live.') }}
+                @endif
+            </flux:text>
             <div class="mt-4" data-test="presale-goal">
-                @if ($paidCount >= 5)
+                @if ($soldOut)
+                    <flux:text class="text-xs">{{ __('All :goal pre-sale places are taken. Join the list for launch.', ['goal' => $goal]) }}</flux:text>
+                @elseif ($paidCount >= 5)
                     <flux:progress :value="min(100, round(100 * $paidCount / max(1, $goal)))" color="amber" />
                     <flux:text class="mt-1.5 text-xs">{{ __(':n of :goal pre-sale places taken', ['n' => $paidCount, 'goal' => $goal]) }}</flux:text>
                 @else
@@ -182,7 +248,7 @@ new #[Title('Plans')] class extends Component {
                 @endif
             </div>
             <flux:button class="mt-4 w-full" :variant="$plan === 'prospector' ? 'primary' : 'outline'" wire:click="choose('prospector')" x-on:click="{{ $toEmail }}">
-                {{ $stripe ? __('Pre-order Prospector') : __('Reserve Prospector') }}
+                {{ $soldOut ? __('Join the list') : ($stripe ? __('Pre-order Prospector') : __('Reserve Prospector')) }}
             </flux:button>
         </flux:card>
         <flux:card @class(['ring-2 ring-zinc-800 dark:ring-white' => $plan === 'team'])>
@@ -195,26 +261,46 @@ new #[Title('Plans')] class extends Component {
 
     <form wire:submit="reserve" class="mt-4 max-w-xl scroll-mt-24 space-y-2">
         <flux:label for="presale-email">
-            {{ $plan === 'team' ? __('Email for team plan news') : ($stripe ? __('Email for your receipt') : __('Email to hold your place')) }}
+            {{ $plan === 'team' ? __('Team: email for team plan news') : ($soldOut ? __('Prospector: email for launch news') : ($stripe ? __('Prospector: email for your receipt') : __('Prospector: email to hold your place'))) }}
         </flux:label>
         <div class="flex gap-2">
             <flux:input id="presale-email" wire:model="email" type="email" autocomplete="email" required :placeholder="__('you@example.com')" class="flex-1" />
             <flux:button type="submit" variant="primary">
-                {{ $plan === 'team' ? __('Register') : ($stripe ? __('Continue to payment') : __('Reserve')) }}
+                {{ $plan === 'team' ? __('Register') : ($soldOut ? __('Join') : ($stripe ? __('Continue to payment') : __('Reserve'))) }}
             </flux:button>
         </div>
         <flux:error name="email" />
         <flux:text class="text-xs">
-            @if ($plan === 'prospector' && $stripe)
+            @if ($plan === 'prospector' && $stripe && ! $soldOut)
                 {{ __('Payment is taken by Stripe. Pegwatch never sees your card.') }}
             @else
                 {{ __('Nothing is charged.') }}
             @endif
+            {{ $tax }}
+            <flux:link :href="route('terms')" wire:navigate>{{ __('Terms') }}</flux:link> {{ __('and') }}
+            <flux:link :href="route('privacy')" wire:navigate>{{ __('privacy') }}</flux:link>.
         </flux:text>
     </form>
 
     <flux:heading size="lg" class="mt-12">{{ __('What each plan includes') }}</flux:heading>
-    <div class="relative mt-2 overflow-x-auto">
+    {{-- Phones: one list per plan, so nothing hides off the side. --}}
+    <div class="mt-2 space-y-6 sm:hidden" data-test="plans-phone">
+        @foreach ($plans as $i => $name)
+            <section>
+                <flux:heading size="sm">{{ $name }}</flux:heading>
+                <ul class="mt-1 divide-y divide-zinc-200 text-sm dark:divide-zinc-700">
+                    @foreach ($rows as $r)
+                        @continue($r[$i + 1] === false)
+                        <li class="flex gap-2 py-2">
+                            <flux:icon.check variant="mini" class="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                            <span>{{ $r[0] }}@if (is_string($r[$i + 1])): <span class="text-zinc-500 dark:text-zinc-400">{{ $r[$i + 1] }}</span>@endif</span>
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
+        @endforeach
+    </div>
+    <div class="relative mt-2 overflow-x-auto max-sm:hidden">
         <flux:table class="min-w-[40rem]">
             <flux:table.columns>
                 <flux:table.column></flux:table.column>
@@ -249,7 +335,11 @@ new #[Title('Plans')] class extends Component {
             {{ __('The day Prospector goes live, not the day you pre-order. We email you before it starts.') }}
         </flux:accordion.item>
         <flux:accordion.item :heading="__('Can I get a refund?')">
-            {{ __('Yes. Until Prospector goes live you can ask for a full refund, for any reason. A reservation is never charged.') }}
+            {{ __('Yes. Until Prospector goes live you can ask for a full refund, for any reason: write to :email. A reservation is never charged.', ['email' => $business['support_email']]) }}
+        </flux:accordion.item>
+        <flux:accordion.item :heading="__('Who sells Pegwatch, and is there GST?')">
+            {{ $business['name'] ? __(':name sells Pegwatch', ['name' => $business['name']]).($business['abn'] ? ' (ABN '.$business['abn'].')' : '').'. ' : '' }}{{ $tax }}
+            {{ __('Questions go to :email.', ['email' => $business['support_email']]) }}
         </flux:accordion.item>
         <flux:accordion.item :heading="__('What stays free?')">
             {{ __('The map, tenement and holder pages, the weekly digest, one watch area and one holder watch with death and release alerts.') }}

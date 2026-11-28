@@ -11,6 +11,16 @@ return [
         'goal' => (int) env('PEGWATCH_PRESALE_GOAL', 20),
     ],
 
+    // Who sells Pegwatch, for the plans page, the footer, the terms and receipts.
+    // The name and ABN show only once set. Leave gst_registered false until the
+    // business is registered for GST; the plans page then says no GST is charged.
+    'business' => [
+        'name' => env('PEGWATCH_BUSINESS_NAME'),
+        'abn' => env('PEGWATCH_ABN'),
+        'gst_registered' => (bool) env('PEGWATCH_GST_REGISTERED', false),
+        'support_email' => env('PEGWATCH_SUPPORT_EMAIL', 'support@pegwatch.com'),
+    ],
+
     // An XYZ raster tile URL ({z}/{x}/{y}) and its credit line for the map's
     // satellite toggle. The toggle is hidden while the URL is unset.
     'satellite' => [

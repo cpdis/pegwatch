@@ -9,6 +9,14 @@ use Illuminate\Support\Facades\Route;
 // The public JSON API, described by /api/openapi.json. No key; rate limited
 // per client. Prefixed /api by bootstrap/app.php.
 
+// GET /api: where to start, for anyone probing the root.
+Route::get('/', fn () => response()->json([
+    'name' => 'Pegwatch API',
+    'openapi' => route('api.openapi'),
+    'status' => route('api.status'),
+    'docs' => route('agents'),
+]))->name('api.index');
+
 Route::get('openapi.json', [DiscoveryController::class, 'openapi'])->name('api.openapi');
 
 Route::prefix('v1')->middleware('throttle:agents')->name('api.')->group(function () {

@@ -1,4 +1,5 @@
 @php
+    app()->instance('pegwatch.error-page', true);
     // A /tenements/<slug> miss names the ID it looked for: "m-27-518" reads as "M 27/518".
     $slug = request()->is('tenements/*') ? mb_substr((string) request()->segment(2), 0, 40) : null;
     $parts = $slug ? explode('-', $slug) : [];
