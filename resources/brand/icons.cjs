@@ -16,6 +16,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pw-icons-'));
 const outputs = [
     ['ico-16.png', 16], ['ico-32.png', 32], ['ico-48.png', 48],
     ['public/favicon.png', 96],
+    ['public/mail/logo.png', 84], // the email header's mark, shown at 28px
     ['public/icon.png', 512],
     ['public/apple-touch-icon.png', 180, true],
 ];

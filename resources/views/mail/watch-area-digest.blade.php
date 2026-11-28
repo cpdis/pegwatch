@@ -1,8 +1,12 @@
 <x-mail::message>
 @if ($preview)
-*Preview: what this email would have said about the last 30 days. Real emails come after a night with changes.*
+<x-mail::panel>
+Preview: what this email would have said about the last 30 days. Real emails come after a night with changes.
+</x-mail::panel>
 
 @endif
+<x-mail::eyebrow>Watch alert</x-mail::eyebrow>
+
 # {{ $area->name }}
 
 {{ $describe }}. {{ $extract ? __('Changes on the WA tenement register in the department\'s extract of :time AWST.', ['time' => $extract]) : __('Changes on the WA tenement register.') }}
@@ -12,7 +16,7 @@
 
 @endif
 @forelse ($groups as $group => $items)
-## {{ \App\Mail\WatchAreaDigest::GROUP_HEADINGS[$group] }}
+## <span style="color: {{ \App\Mail\WatchAreaDigest::GROUP_COLOURS[$group] }};">&#9679;</span> {{ \App\Mail\WatchAreaDigest::GROUP_HEADINGS[$group] }}
 
 @foreach ($items as $item)
 **[{{ $item['id'] }}]({{ $item['url'] }})**@if ($item['meta']) · {{ $item['meta'] }}@endif<br>

@@ -32,6 +32,13 @@ class WatchAreaDigest extends Mailable
 
     public const GROUP_HEADINGS = ['releases' => 'Releases', 'deaths' => 'Tenements recorded dead', 'other' => 'Other changes'];
 
+    /** Each group's dot, in the map's event colours (Format::EVENT_COLOURS). */
+    public const GROUP_COLOURS = [
+        'releases' => Format::EVENT_COLOURS['release_scheduled'],
+        'deaths' => Format::EVENT_COLOURS['death'],
+        'other' => Format::EVENT_COLOURS['status_change'],
+    ];
+
     /** Subject phrases, one and many, in subject order. */
     private const COUNTS = [
         'release_scheduled' => ['1 release scheduled', ':n releases scheduled'],
